@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Black background -->
+  <rect width="32" height="32" fill="#000000" rx="4"/>
+  
+  <!-- Purple letter A -->
+  <text x="16" y="24" 
+        font-family="Arial, sans-serif" 
+        font-size="20" 
+        font-weight="bold" 
+        fill="#8B5CF6" 
+        text-anchor="middle" 
+        dominant-baseline="baseline">A</text>
+</svg>

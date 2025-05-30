@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  portfilio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portfilio
+    restart: always
+    ports:
+      - '3000:3000'
+    networks:
+      - portfilio
+
+networks:
+  portfilio:
+    external: true
+    name: portfilio-network
