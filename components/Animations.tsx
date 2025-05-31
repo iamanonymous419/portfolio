@@ -3,6 +3,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { motion, useAnimation, useInView } from 'framer-motion';
 
+/**
+ * FadeIn component
+ * This component animates its children with a fade-in effect.
+ * It supports various customization options such as delay, direction, duration, and whether the animation should occur only once.
+ * The animation can be triggered when the component comes into view.
+ * Contains main animation logic and variants for different directions.
+ */
 interface FadeInProps {
   children: ReactNode;
   className?: string;

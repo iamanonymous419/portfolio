@@ -2,8 +2,15 @@
 
 import { motion } from 'framer-motion';
 
+/**
+ * AnimatedLogo component
+ * This component displays an animated logo with individual letters that change color and scale on hover.
+ * The letters spell out "Anonymous" and are wrapped in a motion span for animation effects.
+ * The logo is styled using Tailwind CSS classes for layout and typography.
+ */
+
 export const AnimatedLogo = () => {
-  const letters = ['A', 'n', 'o', 'n', 'y', 'm', 'o', 'u', 's'];
+  const letters: string[] = ['A', 'n', 'o', 'n', 'y', 'm', 'o', 'u', 's'];
 
   const letterVariants = {
     initial: {

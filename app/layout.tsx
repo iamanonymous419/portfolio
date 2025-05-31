@@ -3,19 +3,23 @@ import '@/app/globals.css';
 import { Inter, Poppins } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { cn } from '@/lib/utils';
+import type { NextFontWithVariable } from 'next/dist/compiled/@next/font';
 
-const inter = Inter({
+const inter: NextFontWithVariable = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
 });
 
-const poppins = Poppins({
+const poppins: NextFontWithVariable = Poppins({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-poppins',
 });
 
-export const metadata = {
+export const metadata: {
+  title: string;
+  description: string;
+} = {
   title: 'Anonymous - Web Developer & DevOps Expert',
   description:
     'Portfolio website of Anonymous, a Web Developer and DevOps expert specializing in full-stack development and infrastructure as code.',

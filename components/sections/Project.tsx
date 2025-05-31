@@ -10,7 +10,16 @@ import {
   User,
 } from 'lucide-react';
 
-const Project = () => {
+const Project: React.FunctionComponent = () => {
+  /**
+   * Project Section
+   * This section showcases featured projects and open-source contributions.
+   * It includes a header with a title and description, followed by a grid of project cards.
+   * Each project card contains a title, description, link, tags, and an icon.
+   * The section is designed to be visually appealing and responsive,
+   * with animations for smooth entrance effects.
+   */
+
   return (
     <>
       <div className="absolute inset-0 bg-background/95"></div>

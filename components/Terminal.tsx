@@ -6,18 +6,18 @@ import { Moon, Sun } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 
-export const TerminalAbout = () => {
-  const [currentTime, setCurrentTime] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [typedText, setTypedText] = useState('');
+export const TerminalAbout: React.FunctionComponent = () => {
+  const [currentTime, setCurrentTime] = useState<string>('');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const [typedText, setTypedText] = useState<string>('');
 
-  const fullText =
+  const fullText: string =
     'The more I explore, the more I realize how little I truly know.';
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const timeString = now.toLocaleDateString('en-US', {
+    const updateTime = (): void => {
+      const now: Date = new Date();
+      const timeString: string = now.toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',
         day: '2-digit',
@@ -29,13 +29,13 @@ export const TerminalAbout = () => {
     };
 
     updateTime();
-    const interval = setInterval(updateTime, 1000);
+    const interval: NodeJS.Timeout = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    let index = 0;
-    const timer = setInterval(() => {
+    let index: number = 0;
+    const timer: NodeJS.Timeout = setInterval(() => {
       if (index <= fullText.length) {
         setTypedText(fullText.slice(0, index));
         index++;
@@ -48,6 +48,12 @@ export const TerminalAbout = () => {
   }, []);
 
   return (
+    /**
+     * complex terminal component
+     * This component simulates a terminal interface with a dark mode toggle.
+     * It displays the current time, a typing effect for a message,
+     * and a structured representation of user information.
+     */
     <div className="max-w-5xl mx-auto px-4">
       <motion.div
         initial={{ opacity: 0, y: 50 }}

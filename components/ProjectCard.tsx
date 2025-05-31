@@ -22,7 +22,7 @@ interface ProjectCardProps {
   icon: ReactNode;
 }
 
-const getTagColors = (tag: string) => {
+const getTagColors = (tag: string): { bg: string; shadow: string } => {
   const tagColors: { [key: string]: { bg: string; shadow: string } } = {
     // DevOps Tools
     ArgoCD: {
@@ -139,14 +139,21 @@ const getTagColors = (tag: string) => {
   );
 };
 
-export const ProjectCard = ({
+export const ProjectCard: React.FunctionComponent<ProjectCardProps> = ({
   title,
   description,
   link,
   tags,
   icon,
-}: ProjectCardProps) => {
+}) => {
   return (
+    /**
+     * styled using Tailwind CSS and ShadCN UI components
+     * with Framer Motion for animations and hover effects.
+     * The card features a glassmorphism effect with a gradient overlay
+     * and includes a title, description, tags with dynamic colors,
+     * and a button to view the project.
+     */
     <motion.div
       whileHover={{ y: -8, scale: 1.02 }}
       transition={{ duration: 0.3 }}

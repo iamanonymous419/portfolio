@@ -4,6 +4,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 
+/**
+ * Interface representing a skill with its name, proficiency level, and icon.
+ * The `name` is a string representing the skill name.
+ * The `level` is a number representing the proficiency level (0-100).
+ * The `icon` is a string representing the skill icon, which can be an emoji or an image URL.
+ * The `SkillsData` interface is a mapping of skill categories to arrays of skills.
+ * The keys are category names (e.g., 'Frontend', 'Backend', etc.),
+ * and the values are arrays of `Skill` objects.
+ * This structure allows for easy categorization and retrieval of skills based on their type.
+ */
 interface Skill {
   name: string;
   level: number;
@@ -14,10 +24,17 @@ interface SkillsData {
   [key: string]: Skill[];
 }
 
-export const SkillsSection = () => {
-  const [activeTab, setActiveTab] = useState('Frontend');
-  const [isLoading, setIsLoading] = useState(false);
+export const SkillsSection: React.FunctionComponent = () => {
+  const [activeTab, setActiveTab] = useState<string>('Frontend');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  /**
+   * Skills data structured by categories
+   * Skills data categorized into Frontend, Backend, DevOps, and Others.
+   * Each skill has a name, proficiency level (0-100), and an icon.
+   * Icons are represented as emojis for simplicity.
+   * This data can be easily extended or modified to include more skills or categories.
+   */
   const skillsData: SkillsData = {
     Frontend: [
       { name: 'React', level: 90, icon: '⚛️' },
@@ -33,6 +50,7 @@ export const SkillsSection = () => {
     ],
     Backend: [
       { name: 'Node.js', level: 85, icon: '🟢' },
+      { name: 'Python', level: 75, icon: '🐍' },
       { name: 'Express.js', level: 80, icon: '🚂' },
       { name: 'NestJS', level: 75, icon: '🏗️' },
       { name: 'Drizzle ORM', level: 65, icon: '💧' },
@@ -70,9 +88,9 @@ export const SkillsSection = () => {
     ],
   };
 
-  const tabs = ['Frontend', 'Backend', 'DevOps', 'Others'];
+  const tabs: string[] = ['Frontend', 'Backend', 'DevOps', 'Others'];
 
-  const handleTabChange = (tab: string) => {
+  const handleTabChange = (tab: string): void => {
     setIsLoading(true);
     setTimeout(() => {
       setActiveTab(tab);
@@ -81,6 +99,9 @@ export const SkillsSection = () => {
   };
 
   return (
+    /**
+     * SkillsSection component styled with Tailwind CSS and Framer Motion for animations.
+     */
     <Card className="border-primary/20 bg-transparent backdrop-blur-xl border border-white/10 overflow-hidden">
       <CardContent className="p-4 sm:p-6 lg:p-8">
         <div className="text-center mb-6 sm:mb-8">

@@ -3,8 +3,15 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 
+/**
+ * AnimatedQuote component
+ * This component displays a quote with a hover effect that animates a gradient background.
+ * The quote is wrapped in a blockquote element styled with Tailwind CSS classes.
+ * The animation is handled using Framer Motion for smooth transitions.
+ */
+
 export const AnimatedQuote = () => {
-  const [isHovered, setIsHovered] = useState(false);
+  const [isHovered, setIsHovered] = useState<boolean>(false);
 
   return (
     <motion.blockquote

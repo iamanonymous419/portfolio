@@ -21,17 +21,17 @@ import { cn } from '@/lib/utils';
 import Contact from '@/components/sections/Contact';
 import Project from '@/components/sections/Project';
 
-const Home = () => {
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState('');
+const Home: React.FunctionComponent = () => {
+  const [scrolled, setScrolled] = useState<boolean>(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [activeSection, setActiveSection] = useState<string>('');
 
   useEffect(() => {
-    const handleScroll = () => {
+    const handleScroll = (): void => {
       setScrolled(window.scrollY > 50);
 
       // Get all sections
-      const sections = [
+      const sections: string[] = [
         'hero',
         'about',
         'projects',
@@ -39,9 +39,9 @@ const Home = () => {
         'journey',
         'contact',
       ];
-      const scrollPosition = window.scrollY + 200; // Increased offset for better detection
-      const windowHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
+      const scrollPosition: number = window.scrollY + 200; // Increased offset for better detection
+      const windowHeight: number = window.innerHeight;
+      const documentHeight: number = document.documentElement.scrollHeight;
 
       // Check if we're near the bottom of the page (for contact section)
       if (scrollPosition + windowHeight >= documentHeight - 100) {
@@ -49,6 +49,16 @@ const Home = () => {
         return;
       }
 
+      /**
+       * if it work then leave it as it is,
+       * this loop iterates through sections in reverse order
+       * to find the first section that is currently in view.
+       * It checks if the scroll position is greater than or equal to the section's offsetTop minus a threshold (100px).
+       * If it is, it sets that section as the active section and breaks the loop.
+       * This ensures that the active section is always the one closest to the top of the viewport.
+       * This approach allows for smooth scrolling and accurate section detection
+       * while scrolling through the page.
+       */
       for (let i = sections.length - 1; i >= 0; i--) {
         const section = sections[i];
         const element = document.getElementById(section);
@@ -67,11 +77,11 @@ const Home = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const toggleMobileMenu = () => {
+  const toggleMobileMenu = (): void => {
     setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  const scrollToSection = (sectionId: string) => {
+  const scrollToSection = (sectionId: string): void => {
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
@@ -79,7 +89,7 @@ const Home = () => {
     setMobileMenuOpen(false);
   };
 
-  const getNavItemClass = (section: string) => {
+  const getNavItemClass = (section: string): string => {
     const isActive = activeSection === section;
     return cn(
       'relative transition-all duration-500',
@@ -89,7 +99,7 @@ const Home = () => {
     );
   };
 
-  const getMobileNavItemClass = (section: string) => {
+  const getMobileNavItemClass = (section: string): string => {
     const isActive = activeSection === section;
     return cn(
       'py-2 px-4 rounded-md transition-all duration-500 text-left',
@@ -99,6 +109,16 @@ const Home = () => {
     );
   };
 
+  /**
+   * This is the main Home component that renders the entire page.
+   * It includes a header with navigation, a hero section, and various content sections.
+   * The header is sticky and changes style based on scroll position.
+   * The component uses hooks to manage scroll state, mobile menu state, and active section state.
+   * It also includes smooth scrolling functionality for navigation links.
+   * The page is styled using Tailwind CSS and includes various animations for a modern look.
+   * The main content includes sections for the hero, about, projects, skills, learning journey, and contact.
+   * The footer includes a quote and links to the GitHub profile.
+   */
   return (
     <div className="min-h-screen bg-background font-sans overflow-x-hidden">
       {/* Header */}

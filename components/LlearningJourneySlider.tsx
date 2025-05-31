@@ -12,9 +12,9 @@ interface JourneyItem {
   icon: string;
 }
 
-export const LearningJourneySlider = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+export const LearningJourneySlider: React.FunctionComponent = () => {
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
 
   const journeyItems: JourneyItem[] = [
     { date: 'August 2023', skill: 'HTML', icon: '🌐' },
@@ -39,11 +39,12 @@ export const LearningJourneySlider = () => {
       icon: '☁️',
     },
     { date: 'April 2025', skill: 'AWS & its Services Deep Dive', icon: '🧠' },
-    { date: 'May 2025', skill: 'Present Day', icon: '📍' },
+    { date: 'May 2025', skill: 'Python', icon: '🐍' },
+    { date: 'June 2025', skill: 'Present Day', icon: '📍' },
   ];
 
   // Responsive items per page
-  const getItemsPerPage = () => {
+  const getItemsPerPage = (): 1 | 2 => {
     if (typeof window !== 'undefined') {
       if (window.innerWidth < 768) return 1; // Mobile
       return 2; // Desktop
@@ -51,10 +52,10 @@ export const LearningJourneySlider = () => {
     return 2;
   };
 
-  const [itemsPerPage, setItemsPerPage] = useState(getItemsPerPage());
-  const totalPages = Math.ceil(journeyItems.length / itemsPerPage);
+  const [itemsPerPage, setItemsPerPage] = useState<1 | 2>(getItemsPerPage());
+  const totalPages: number = Math.ceil(journeyItems.length / itemsPerPage);
 
-  const nextSlide = () => {
+  const nextSlide = (): void => {
     if (isTransitioning) return;
     setIsTransitioning(true);
     setTimeout(() => {
@@ -63,7 +64,7 @@ export const LearningJourneySlider = () => {
     }, 150);
   };
 
-  const prevSlide = () => {
+  const prevSlide = (): void => {
     if (isTransitioning) return;
     setIsTransitioning(true);
     setTimeout(() => {
@@ -72,7 +73,7 @@ export const LearningJourneySlider = () => {
     }, 150);
   };
 
-  const goToSlide = (index: number) => {
+  const goToSlide = (index: number): void => {
     if (isTransitioning || index === currentIndex) return;
     setIsTransitioning(true);
     setTimeout(() => {
@@ -81,12 +82,19 @@ export const LearningJourneySlider = () => {
     }, 150);
   };
 
-  const getCurrentItems = () => {
+  const getCurrentItems = (): JourneyItem[] => {
     const start = currentIndex * itemsPerPage;
     return journeyItems.slice(start, start + itemsPerPage);
   };
 
   return (
+    /**
+     * Learning Journey Slider Component
+     * This component displays a slider showcasing my learning journey with animated transitions.
+     * It includes navigation buttons and a responsive design that adapts to different screen sizes.
+     * The slider features a glassmorphism effect with a gradient overlay and smooth animations
+     * using Framer Motion.
+     */
     <div className="relative w-full">
       <div className="text-center mb-6 sm:mb-8">
         <motion.h2

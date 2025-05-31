@@ -11,8 +11,8 @@ import { FadeIn, StaggerContainer, StaggerItem } from '../Animations';
 import { Button } from '../ui/button';
 import Link from 'next/link';
 
-const Contact = () => {
-  const getContactButtonColors = (platform: string) => {
+const Contact: React.FunctionComponent = () => {
+  const getContactButtonColors = (platform: string): string => {
     const colors: { [key: string]: string } = {
       Email:
         'hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-500/30',
@@ -33,6 +33,22 @@ const Contact = () => {
   };
 
   return (
+    /**
+     * Contact Section and Contact Buttons
+     * This section provides a way for users to connect with the developer
+     * through various platforms like Email, LinkedIn, Reddit, X, Instagram, and GitHub.
+     * Each button has a unique hover effect and color scheme to enhance user interaction.
+     * The buttons are wrapped in a staggered animation for a smooth entrance effect.
+     * The section is responsive and adjusts to different screen sizes.
+     * The FadeIn component is used to animate the entrance of the section.
+     * The StaggerContainer and StaggerItem components are used to create staggered animations for the buttons.
+     * The buttons are styled with Tailwind CSS classes for a modern look.
+     * Icons from Lucide React are used to visually represent each platform.
+     * The section is wrapped in a container for proper alignment and spacing.
+     * The section is designed to be visually appealing and user-friendly,
+     * encouraging users to reach out and connect with the developer.
+     */
+
     <div className="container px-4">
       <FadeIn>
         <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 text-center mb-8 sm:mb-12">
