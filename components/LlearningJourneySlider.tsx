@@ -16,6 +16,28 @@ export const LearningJourneySlider: React.FunctionComponent = () => {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
 
+  // Get current month and year dynamically
+  const getCurrentDate = (): string => {
+    const now: Date = new Date();
+    const monthNames: string[] = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    const currentMonth: string = monthNames[now.getMonth()];
+    const currentYear: number = now.getFullYear();
+    return `${currentMonth} ${currentYear}`;
+  };
+
   const journeyItems: JourneyItem[] = [
     { date: 'August 2023', skill: 'HTML', icon: '🌐' },
     { date: 'November 2023', skill: 'CSS', icon: '🎨' },
@@ -39,8 +61,13 @@ export const LearningJourneySlider: React.FunctionComponent = () => {
       icon: '☁️',
     },
     { date: 'April 2025', skill: 'AWS & its Services Deep Dive', icon: '🧠' },
-    { date: 'May 2025', skill: 'Python', icon: '🐍' },
-    { date: 'June 2025', skill: 'Present Day', icon: '📍' },
+    {
+      date: 'May 2025',
+      skill: 'SonarQube, OWASP & HashiCorp Vault',
+      icon: '🔍 🛡️ 🔐',
+    },
+    { date: 'June 2025', skill: 'Python', icon: '🐍' },
+    { date: getCurrentDate(), skill: 'Present Day', icon: '📍' },
   ];
 
   // Responsive items per page

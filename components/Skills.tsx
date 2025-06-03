@@ -72,6 +72,9 @@ export const SkillsSection: React.FunctionComponent = () => {
       { name: 'Prometheus', level: 70, icon: '📈' },
       { name: 'Linux', level: 85, icon: '🐧' },
       { name: 'Bash', level: 75, icon: '💻' },
+      { name: 'SonarQube', level: 75, icon: '🔍' },
+      { name: 'OWASP ZAP', level: 70, icon: '🛡️' },
+      { name: 'GitHub Action', level: 55, icon: '⚙️' },
     ],
     Others: [
       { name: 'Next.js', level: 85, icon: '⚡' },
@@ -85,6 +88,7 @@ export const SkillsSection: React.FunctionComponent = () => {
       { name: 'NPM', level: 85, icon: '📦' },
       { name: 'pnpm', level: 75, icon: '⚡' },
       { name: 'Bun', level: 70, icon: '🥖' },
+      { name: 'HashiCorp Vault', level: 20, icon: '🔐' },
     ],
   };
 
