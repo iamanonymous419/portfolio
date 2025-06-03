@@ -234,7 +234,7 @@ export const TerminalAbout: React.FunctionComponent = () => {
                 <span
                   className={`${isDarkMode ? 'text-cyan-300' : 'text-cyan-600'}`}
                 >
-                  'DevSecOps'
+                  &apos;DevSecOps&apos;
                 </span>
               </div>
               <div className="ml-4 sm:ml-6 mb-1 sm:mb-2">]</div>
