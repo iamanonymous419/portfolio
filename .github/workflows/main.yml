@@ -1,0 +1,82 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Generate Random Tag
+      id: tag
+      run: echo "TAG=$(uuidgen)" >> $GITHUB_ENV
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
+        platforms: linux/amd64,linux/arm64
+
+    - name: Send Success Email
+      if: success()
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        secure: true
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: 🚀 Docker Image Build & Push Success
+        to: ${{ vars.EMAIL_TO }}  # Using repository variable
+        from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
+        html_body: |
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px;">
+            <h2 style="color: #2c974b;">✅ Docker Build & Push Succeeded</h2>
+            <p><strong>Repository:</strong> ${{ github.repository }}</p>
+            <p><strong>Branch:</strong> ${{ github.ref }}</p>
+            <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
+            <p><strong>Docker Image:</strong> <code>${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}</code></p>
+            <p><strong>GitHub Run:</strong> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow</a></p>
+            <hr />
+            <p style="font-size: 12px; color: #888;">This is an automated email sent by GitHub Actions.</p>
+          </div>
+
+    - name: Send Failure Email
+      if: failure()
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        secure: true
+        username: ${{ secrets.EMAIL_USERNAME }}
+        password: ${{ secrets.EMAIL_PASSWORD }}
+        subject: ❌ Docker Build/Push Failed
+        to: ${{ vars.EMAIL_TO }}  # Using repository variable
+        from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
+        html_body: |
+          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px;">
+            <h2 style="color: #d73a49;">❌ Docker Build or Push Failed</h2>
+            <p><strong>Repository:</strong> ${{ github.repository }}</p>
+            <p><strong>Branch:</strong> ${{ github.ref }}</p>
+            <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
+            <p><strong>GitHub Run:</strong> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow</a></p>
+            <hr />
+            <p style="font-size: 12px; color: #888;">Please check the logs in GitHub Actions to investigate.</p>
+          </div>
