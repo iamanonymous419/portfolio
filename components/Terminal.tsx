@@ -229,6 +229,7 @@ export const TerminalAbout: React.FunctionComponent = () => {
                 >
                   &apos;DevOps&apos;
                 </span>
+                ,
               </div>
               <div className="ml-8 sm:ml-12 mb-1 break-words">
                 <span
@@ -238,7 +239,7 @@ export const TerminalAbout: React.FunctionComponent = () => {
                 </span>
               </div>
               <div className="ml-4 sm:ml-6 mb-1 sm:mb-2">]</div>
-              <div>{'}'}</div>
+              <div>{'};'}</div>
             </motion.div>
           </div>
         </Card>
