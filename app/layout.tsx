@@ -22,7 +22,7 @@ export const metadata: {
 } = {
   title: 'Anonymous - Web Developer & DevOps Expert',
   description:
-    'Portfolio website of Anonymous, a Web Developer and DevOps expert specializing in full-stack development and infrastructure as code.',
+    'Portfolio website of Anonymous, A Web Developer and DevOps expert specializing in full-stack development and infrastructure as code.',
 };
 
 export default function RootLayout({
