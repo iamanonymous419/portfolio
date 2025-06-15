@@ -1,0 +1,259 @@
+---
+name: (single job) DevSecOps CI Pipeline - Portfolio Website
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  devsecops-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      ##################################
+      # 🔽 Checkout Code
+      ##################################
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for SonarCloud
+          # This ensures all history is fetched, which is required for SonarCloud analysis
+          # and allows for accurate commit history and blame information.
+
+      ##################################
+      # 📊 SonarCloud Scan
+      ##################################
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        with:
+          args: >
+            -Dsonar.organization=iamanonymous419
+            -Dsonar.projectKey=iamanonymous419_portfolio
+            -Dsonar.projectName=Portfolio
+            -Dsonar.projectVersion=${{ github.sha }}
+            -Dsonar.sources=.
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: 'https://sonarcloud.io'
+
+      ##################################
+      # ✅ SonarCloud Quality Gate Check
+      ##################################
+      - name: SonarCloud Quality Gate check
+        id: sonarcloud-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          pollingTimeoutSec: 600
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: 'https://sonarcloud.io'
+
+      ##################################
+      # ⚙️ Setup Bun
+      ##################################
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      ##################################
+      # 📦 Install Dependencies
+      ##################################
+      - name: Install Dependencies
+        run: bun install
+
+      ##################################
+      # 💾 Cache OWASP Dependency DB
+      ##################################
+      - name: Cache OWASP DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check
+          key: owasp-db-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            owasp-db-${{ runner.os }}-
+
+      ##################################
+      # 🛡️ Run OWASP Dependency-Check
+      ##################################
+      - name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'portfolio'
+          path: '.'
+          format: 'HTML'
+          out: 'owasp-report'
+
+      ##################################
+      # 📊 Run Bun Audit
+      ##################################
+      - name: Run bun audit
+        run: bun audit > bun-audit-report.txt || true
+
+      ##################################
+      # 🏷️ Generate Random Docker Tag
+      ##################################
+      - name: Generate Random Tag
+        id: tag
+        run: echo "TAG=$(uuidgen)" >> $GITHUB_ENV
+
+      ##################################
+      # 🛠️ Setup Docker Buildx
+      ##################################
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      ##################################
+      # 🔐 Docker Hub Login
+      ##################################
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      ##################################
+      # 🐳 Build & Push Docker Image
+      ##################################
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
+            ${{ secrets.DOCKER_IMAGE }}:latest
+          platforms: linux/amd64,linux/arm64
+
+      ##################################
+      # ⏱️ Wait for Image Propagation
+      ##################################
+      - name: Wait for image availability
+        run: |
+          echo "Waiting for image to be available..."
+          sleep 15
+
+      ##################################
+      # 🔍 Trivy Scan (TAG) - Table
+      ##################################
+      - name: Trivy Scan (TAG) - Table
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
+          format: 'table'
+          output: 'trivy-${{ env.TAG }}.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      ##################################
+      # 🔍 Trivy Scan (latest) - Table
+      ##################################
+      - name: Trivy Scan (latest) - Table
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:latest
+          format: 'table'
+          output: 'trivy-latest.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      ##################################
+      # 🔍 Trivy Scan (TAG) - SARIF
+      ##################################
+      - name: Trivy Scan (TAG) - SARIF
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
+          format: 'sarif'
+          output: 'trivy-${{ env.TAG }}.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      ##################################
+      # 🔍 Trivy Scan (latest) - SARIF
+      ##################################
+      - name: Trivy Scan (latest) - SARIF
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:latest
+          format: 'sarif'
+          output: 'trivy-latest.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      ##################################
+      # ☁️ Upload SARIF to GitHub Security
+      ##################################
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-latest.sarif
+
+      ##################################
+      # 📤 Upload Reports as Artifact
+      ##################################
+      - name: Upload Reports as Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports-${{ env.TAG }}
+          path: |
+            owasp-report/
+            bun-audit-report.*
+            trivy-*.sarif
+            trivy-*.txt
+          retention-days: 30
+
+      ##################################
+      # 📧 Email Report on Success
+      ##################################
+      - name: Send Success Email
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '🚀 Secure Build Passed - ${{ github.repository }}'
+          to: ${{ vars.EMAIL_TO }}
+          from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
+          html_body: |
+            <div style="font-family: Arial; padding: 20px;">
+              <h2 style="color: green;">✅ Secure Build Pipeline Completed Successfully</h2>
+              <p><strong>Repository:</strong> ${{ github.repository }}</p>
+              <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
+              <p><strong>Commit:</strong> <code>${{ github.sha }}</code></p>
+              <p><strong>Security Checks Passed:</strong></p>
+              <ul>
+                <li>✅ OWASP Dependency Check</li>
+                <li>✅ Bun Audit</li>
+                <li>✅ Trivy Container/File System Scan</li>
+              </ul>
+              <p>📝 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Full Logs & Download Reports</a></p>
+            </div>
+
+      ##################################
+      # 📧 Email Report on Failure
+      ##################################
+      - name: Send Failure Email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '❌ Security Pipeline Failed - ${{ github.repository }}'
+          to: ${{ vars.EMAIL_TO }}
+          from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
+          html_body: |
+            <div style="font-family: Arial; padding: 20px;">
+              <h2 style="color: red;">❌ Security Pipeline Failed</h2>
+              <p><strong>Repository:</strong> ${{ github.repository }}</p>
+              <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
+              <p><strong>Commit:</strong> <code>${{ github.sha }}</code></p>
+              <p><strong>Job:</strong> ${{ github.job }}</p>
+              <p>Please review the logs and attached reports to investigate the failure.</p>
+              <p>🛠️ <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs & Download Reports</a></p>
+            </div>

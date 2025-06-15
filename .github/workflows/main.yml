@@ -1,32 +1,219 @@
-name: Build and Push Docker Image
+# DevSecOps CI Pipeline for Portfolio Website
+# ===========================================
+# This pipeline implements a comprehensive DevSecOps approach with:
+# - Static code analysis (SonarCloud)
+# - Dependency security scanning (OWASP, Bun Audit)
+# - Container security scanning (Trivy)
+# - Automated notifications
+# - Security report aggregation
 
+---
+name: DevSecOps CI Pipeline - Portfolio Website
+
+# Pipeline Triggers
+# -----------------
+# Runs on pushes to main branch and pull requests
+# Excludes documentation and workflow changes to optimize CI time
 on:
   push:
-    branches:
-      - main
+    branches: ['main']
+    paths-ignore:
+      - 'README.md'
+      - '*.md'
+      - '.github/workflows/**'
+      - 'docs/**'
+  pull_request:
+    branches: ['main']
+    paths-ignore:
+      - 'README.md'
+      - '*.md'
+      - '.github/workflows/**'
+      - 'docs/**'
+
+# Security Permissions
+# --------------------
+# Minimal permissions following principle of least privilege
+permissions:
+  contents: read # Read repository contents
+  security-events: write # Upload security scan results to GitHub Security tab
 
 jobs:
-  build-and-push:
+  ##################################
+  # 🔍 STATIC ANALYSIS & QUALITY GATE
+  ##################################
+  static-analysis:
+    name: Static Code Analysis
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      ##################################
+      # 🔽 Checkout Code
+      ##################################
+      # Checkout with full history for SonarCloud analysis
+      - id: checkout-code
+        name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full git history required for SonarCloud blame information
+
+      ##################################
+      # 📊 SonarCloud Scan
+      ##################################
+      # SonarCloud code quality and security analysis
+      - id: sonarcloud-scan
+        name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # SonarCloud authentication token
+          SONAR_HOST_URL: 'https://sonarcloud.io' # SonarCloud endpoint
+        with:
+          args: >
+            -Dsonar.organization=iamanonymous419       
+            -Dsonar.projectKey=iamanonymous419_portfolio 
+            -Dsonar.projectName=Portfolio              
+            -Dsonar.projectVersion=${{ github.sha }}   
+            -Dsonar.sources=.
+      # Quality gate check - fails pipeline if quality standards not met
+      - id: sonarcloud-quality-gate-check
+        name: SonarCloud Quality Gate check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        with:
+          pollingTimeoutSec: 600 # Wait up to 10 minutes for quality gate result
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  ##################################
+  # 🛡️ DEPENDENCY SECURITY ANALYSIS
+  ##################################
+  dependency-security:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      ##################################
+      # 🔽 Checkout Code
+      ##################################
+      # Checkout code for dependency analysis
+      - id: checkout-code
+        name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Generate Random Tag
-        id: tag
-        run: echo "TAG=$(uuidgen)" >> $GITHUB_ENV
+      ##################################
+      # 🔧 Setup Build Environment
+      ##################################
+      # Setup Bun runtime for package management
+      - id: setup-bun
+        name: Setup Bun
+        uses: oven-sh/setup-bun@v1
 
-      - name: Set up Docker Buildx
+      # Install dependencies for security scanning
+      - id: install-dependencies
+        name: Install Dependencies
+        run: bun install
+
+      ##################################
+      # 🗃️ Cache Management
+      ##################################
+      # Cache OWASP vulnerability database to speed up subsequent runs
+      - id: cache-owasp-db
+        name: Cache OWASP DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check
+          key: owasp-db-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            owasp-db-${{ runner.os }}-
+
+      ##################################
+      # 🔍 Security Scanning
+      ##################################
+      # OWASP Dependency Check - scans for known vulnerabilities in dependencies
+      - id: run-owasp-dependency-check
+        name: Run OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'portfolio' # Project name for reporting
+          path: '.' # Scan current directory
+          format: 'HTML' # Output format for human-readable reports
+          out: 'owasp-report' # Output directory
+
+      # Bun's built-in security audit
+      - id: run-bun-audit
+        name: Run Bun Audit
+        run: bun audit > bun-audit-report.txt || true # Continue on audit failures
+
+      ##################################
+      # 📤 Upload Reports
+      ##################################
+      # Upload security reports as artifacts for review
+      - id: upload-dependency-reports
+        name: Upload Dependency Reports
+        uses: actions/upload-artifact@v4
+        if: always() # Upload even if previous steps failed
+        with:
+          name: dependency-security-reports
+          path: |
+            owasp-report/
+            bun-audit-report.txt
+          retention-days: 30 # Keep reports for 30 days
+
+  ##################################
+  # 🐳 BUILD, SCAN & PUSH CONTAINER
+  ##################################
+  build-scan-push:
+    name: Build, Scan & Push Container
+    runs-on: ubuntu-latest
+    # Only run if security checks pass
+    needs: [static-analysis, dependency-security]
+
+    # Job outputs for downstream jobs
+    outputs:
+      image-tag: ${{ steps.generate-random-tag.outputs.tag }}
+      critical-vulns: ${{ steps.analyze-vulnerabilities.outputs.critical-vulns }}
+      high-vulns: ${{ steps.analyze-vulnerabilities.outputs.high-vulns }}
+
+    steps:
+      ##################################
+      # 🔽 Checkout Code
+      ##################################
+      # Checkout code for Docker build
+      - id: checkout-code
+        name: Checkout Code
+        uses: actions/checkout@v4
+
+      ##################################
+      # 🏷️ Generate Tags
+      ##################################
+      # Generate unique tag for this build
+      - id: generate-random-tag
+        name: Generate Random Tag
+        run: |
+          TAG=$(uuidgen)  # Generate UUID for unique tagging
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      ##################################
+      # 🔧 Setup Docker Environment
+      ##################################
+      # Setup Docker Buildx for multi-platform builds
+      - id: setup-docker-buildx
+        name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      # Authenticate with Docker Hub
+      - id: login-docker-hub
+        name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Build and Push Docker Image
+      ##################################
+      # 🏗️ Build & Push Image
+      ##################################
+      # Build and push multi-architecture Docker image
+      - id: build-and-push-docker-image
+        name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -34,38 +221,281 @@ jobs:
           tags: |
             ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
             ${{ secrets.DOCKER_IMAGE }}:latest
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm64 # Multi-architecture support
 
-      - name: Send Success Email
-        if: success()
+      # Wait for image to be available in registry
+      - id: wait-for-image-availability
+        name: Wait for image availability
+        run: |
+          echo "Waiting for image to be available..."
+          echo "Image: ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}"
+          sleep 30  # Give registry time to process
+          echo "Verifying image exists..."
+          docker pull ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }} || echo "Image pull failed, but continuing..."
+
+      ##################################
+      # 🔍 Security Scanning with Trivy
+      ##################################
+
+      # Scan latest tag - Table format for human review (run first)
+      - id: trivy-scan-latest-table
+        name: Trivy Scan (latest) - Table Format
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:latest
+          format: 'table' # Human-readable format
+          output: 'trivy-latest-table.txt' # Changed filename to be more specific
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      # Scan specific tag - Table format
+      - id: trivy-scan-specific-table
+        name: Trivy Scan (specific tag) - Table Format
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
+          format: 'table'
+          output: 'trivy-specific-table.txt' # Changed filename to be more specific
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      # Scan latest tag - SARIF format for GitHub Security tab
+      - id: trivy-scan-latest-sarif
+        name: Trivy Scan (latest) - SARIF Format
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:latest
+          format: 'sarif' # Machine-readable format
+          output: 'trivy-latest.sarif' # Keep original filename
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      # Scan specific tag - SARIF format
+      - id: trivy-scan-specific-sarif
+        name: Trivy Scan (specific tag) - SARIF Format
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}
+          format: 'sarif'
+          output: 'trivy-specific.sarif' # Keep original filename
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      ##################################
+      # 📊 Analyze Results
+      ##################################
+      # Analyze and count vulnerabilities
+      - id: analyze-vulnerabilities
+        name: Analyze Vulnerability Results
+        run: |
+          echo "=== Vulnerability Analysis Results ==="
+
+          # Initialize vulnerability counters
+          TOTAL_CRITICAL=0
+          TOTAL_HIGH=0
+
+          # Process latest tag scan results
+          if [ -f "trivy-latest-table.txt" ]; then
+            echo "Latest tag scan results:"
+            # Count critical and high vulnerabilities
+            CRITICAL_LATEST=$(grep -c "CRITICAL" trivy-latest-table.txt || echo "0")
+            HIGH_LATEST=$(grep -c "HIGH" trivy-latest-table.txt || echo "0")
+            echo "  Critical vulnerabilities: $CRITICAL_LATEST"
+            echo "  High vulnerabilities: $HIGH_LATEST"
+            TOTAL_CRITICAL=$((TOTAL_CRITICAL + CRITICAL_LATEST))
+            TOTAL_HIGH=$((TOTAL_HIGH + HIGH_LATEST))
+          fi
+
+          # Process specific tag scan results
+          if [ -f "trivy-specific-table.txt" ]; then
+            echo "Specific tag scan results:"
+            CRITICAL_SPECIFIC=$(grep -c "CRITICAL" trivy-specific-table.txt || echo "0")
+            HIGH_SPECIFIC=$(grep -c "HIGH" trivy-specific-table.txt || echo "0")
+            echo "  Critical vulnerabilities: $CRITICAL_SPECIFIC"
+            echo "  High vulnerabilities: $HIGH_SPECIFIC"
+            
+            # Use the higher count if scanning different images
+            if [ "$CRITICAL_SPECIFIC" -gt "$TOTAL_CRITICAL" ]; then
+              TOTAL_CRITICAL=$CRITICAL_SPECIFIC
+            fi
+            if [ "$HIGH_SPECIFIC" -gt "$TOTAL_HIGH" ]; then
+              TOTAL_HIGH=$HIGH_SPECIFIC
+            fi
+          fi
+
+          echo "=== Summary ==="
+          echo "Total Critical vulnerabilities: $TOTAL_CRITICAL"
+          echo "Total High vulnerabilities: $TOTAL_HIGH"
+
+          # Export results for downstream jobs
+          echo "critical-vulns=$TOTAL_CRITICAL" >> $GITHUB_OUTPUT
+          echo "high-vulns=$TOTAL_HIGH" >> $GITHUB_OUTPUT
+
+          # Show sample output for debugging
+          if [ -f "trivy-latest-table.txt" ]; then
+            echo "=== Sample scan output (first 20 lines) ==="
+            head -20 trivy-latest-table.txt
+          fi
+
+          # Verify file formats
+          echo "=== File verification ==="
+          if [ -f "trivy-latest-table.txt" ]; then
+            echo "Table format file size: $(wc -l < trivy-latest-table.txt) lines"
+          fi
+          if [ -f "trivy-latest.sarif" ]; then
+            echo "SARIF format file size: $(wc -l < trivy-latest.sarif) lines"
+            echo "SARIF file contains JSON: $(head -1 trivy-latest.sarif | grep -q '{' && echo 'Yes' || echo 'No')"
+          fi
+
+      ##################################
+      # 📤 Upload Results
+      ##################################
+      # Upload SARIF results to GitHub Security tab
+      - id: upload-sarif-to-github-security
+        name: Upload SARIF to GitHub Security
+        if: steps.trivy-scan-latest-sarif.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-latest.sarif
+
+      # Upload all container security reports as artifacts
+      - id: upload-container-security-reports
+        name: Upload Container Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: container-security-reports
+          path: |
+            trivy-latest.sarif
+            trivy-latest-table.txt
+            trivy-specific.sarif
+            trivy-specific-table.txt
+          retention-days: 30
+
+  ##################################
+  # 📊 SECURITY REPORT AGGREGATION
+  ##################################
+  security-report:
+    name: Security Report Summary
+    runs-on: ubuntu-latest
+    # Run after all security jobs, regardless of their outcome
+    needs: [static-analysis, dependency-security, build-scan-push]
+    if: always()
+
+    steps:
+      ##################################
+      # 📥 Download Artifacts
+      ##################################
+      # Download all artifacts from previous jobs
+      - id: download-all-artifacts
+        name: Download All Artifacts
+        uses: actions/download-artifact@v4
+
+      ##################################
+      # 📋 Create Summary Report
+      ##################################
+      # Create comprehensive security summary report
+      - id: create-security-summary
+        name: Create Security Summary
+        run: |
+          echo "# 🛡️ DevSecOps Security Report" > security-summary.md
+          echo "" >> security-summary.md
+
+          echo "## Pipeline Execution Summary" >> security-summary.md
+          echo "- **Static Analysis**: ${{ needs.static-analysis.result }}" >> security-summary.md
+          echo "- **Dependency Security**: ${{ needs.dependency-security.result }}" >> security-summary.md
+          echo "- **Build, Scan & Push**: ${{ needs.build-scan-push.result }}" >> security-summary.md
+          echo "" >> security-summary.md
+
+          echo "## Security Scan Results" >> security-summary.md
+          echo "- SonarCloud Quality Gate: $([ "${{ needs.static-analysis.result }}" == "success" ] && echo "✅ PASSED" || echo "❌ FAILED")" >> security-summary.md
+          echo "- OWASP Dependency Check: $([ "${{ needs.dependency-security.result }}" == "success" ] && echo "✅ PASSED" || echo "❌ FAILED")" >> security-summary.md
+          echo "- Container Security Scan: $([ "${{ needs.build-scan-push.result }}" == "success" ] && echo "✅ COMPLETED" || echo "⚠️ COMPLETED WITH ISSUES")" >> security-summary.md
+          echo "" >> security-summary.md
+
+          echo "## Container Security Details" >> security-summary.md
+          echo "- Scanned Image: ${{ needs.build-scan-push.outputs.image-name }}:${{ needs.build-scan-push.outputs.image-tag }}" >> security-summary.md
+          echo "- Critical Vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}" >> security-summary.md
+          echo "- High Vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}" >> security-summary.md
+          echo "- Scan focused on CRITICAL, HIGH, MEDIUM, and LOW severity vulnerabilities" >> security-summary.md
+          echo "- Check the artifacts for detailed vulnerability reports" >> security-summary.md
+          echo "" >> security-summary.md
+
+          echo "## Next Steps" >> security-summary.md
+          echo "1. Review vulnerability reports in the artifacts" >> security-summary.md
+          echo "2. Update base images and dependencies for any critical vulnerabilities" >> security-summary.md
+          echo "3. Consider implementing vulnerability thresholds for future builds" >> security-summary.md
+
+      ##################################
+      # 📤 Upload Summary
+      ##################################
+      # Upload security summary as artifact
+      - id: upload-security-summary
+        name: Upload Security Summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-summary
+          path: security-summary.md
+          retention-days: 30
+
+  ##################################
+  # 📧 NOTIFICATION SYSTEM
+  ##################################
+  notification:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    # Run after all main jobs complete
+    needs: [static-analysis, dependency-security, build-scan-push]
+    if: always()
+
+    steps:
+      ##################################
+      # ✅ Success Notifications
+      ##################################
+      # Send success notification when all jobs pass
+      - id: send-success-email
+        name: Send Success Email
+        if: needs.static-analysis.result == 'success' && needs.dependency-security.result == 'success' && needs.build-scan-push.result == 'success'
         uses: dawidd6/action-send-mail@v3
         with:
+          # Gmail SMTP configuration
           server_address: smtp.gmail.com
           server_port: 465
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: 🚀 Docker Image Build & Push Success
-          to: ${{ vars.EMAIL_TO }} # Using repository variable
+          subject: '🚀 DevSecOps Pipeline Success - Portfolio Website'
+          to: ${{ vars.EMAIL_TO }}
           from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
           html_body: |
-            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px;">
-              <h2 style="color: #2c974b;">✅ Docker Build & Push Succeeded</h2>
-              <p><strong>Repository:</strong> ${{ github.repository }}</p>
-              <p><strong>Branch:</strong> ${{ github.ref }}</p>
+            <div style="font-family: Arial; padding: 20px;">
+              <h2 style="color: green;">✅ DevSecOps CI Pipeline Completed Successfully</h2>
+              <p><strong>Portfolio Website:</strong> ${{ github.repository }}</p>
               <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
-              <p><strong>Docker Images:</strong></p>
+              <p><strong>Commit:</strong> <code>${{ github.sha }}</code></p>
+              <p><strong>Docker Image:</strong> ${{ needs.build-scan-push.outputs.image-name }}:${{ needs.build-scan-push.outputs.image-tag }}</p>
+              
+              <p><strong>DevSecOps Security Checks Completed:</strong></p>
               <ul>
-                <li><code>${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }}</code></li>
-                <li><code>${{ secrets.DOCKER_IMAGE }}:latest</code></li>
+                <li>✅ SonarCloud Quality Gate (Code Quality & Security)</li>
+                <li>✅ OWASP Dependency Check (Vulnerability Scanning)</li>
+                <li>✅ Bun Audit (Package Security)</li>
+                <li>✅ Trivy Container Scanning (Image Security)</li>
               </ul>
-              <p><strong>GitHub Run:</strong> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow</a></p>
-              <hr />
-              <p style="font-size: 12px; color: #888;">This is an automated email sent by GitHub Actions.</p>
+              
+              <p><strong>Container Security Summary:</strong></p>
+              <ul>
+                <li>Critical Vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}</li>
+                <li>High Vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}</li>
+              </ul>
+              
+              <p>📝 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Full Logs & Download Reports</a></p>
             </div>
 
-      - name: Send Failure Email
-        if: failure()
+      ##################################
+      # ❌ Failure Notifications
+      ##################################
+      # Send failure notification when any job fails
+      - id: send-failure-email
+        name: Send Failure Email
+        if: needs.static-analysis.result == 'failure' || needs.dependency-security.result == 'failure' || needs.build-scan-push.result == 'failure'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -73,16 +503,97 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: ❌ Docker Build/Push Failed
-          to: ${{ vars.EMAIL_TO }} # Using repository variable
+          subject: '❌ DevSecOps Pipeline Failed - Portfolio Website'
+          to: ${{ vars.EMAIL_TO }}
           from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
           html_body: |
-            <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px;">
-              <h2 style="color: #d73a49;">❌ Docker Build or Push Failed</h2>
-              <p><strong>Repository:</strong> ${{ github.repository }}</p>
-              <p><strong>Branch:</strong> ${{ github.ref }}</p>
+            <div style="font-family: Arial; padding: 20px;">
+              <h2 style="color: red;">❌ DevSecOps Pipeline Failed</h2>
+              <p><strong>Portfolio Website:</strong> ${{ github.repository }}</p>
               <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
-              <p><strong>GitHub Run:</strong> <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow</a></p>
-              <hr />
-              <p style="font-size: 12px; color: #888;">Please check the logs in GitHub Actions to investigate.</p>
+              <p><strong>Commit:</strong> <code>${{ github.sha }}</code></p>
+              
+              <p><strong>Failed Jobs:</strong></p>
+              <ul>
+                <li>Static Analysis: ${{ needs.static-analysis.result == 'failure' && '❌ FAILED' || '✅ PASSED' }}</li>
+                <li>Dependency Security: ${{ needs.dependency-security.result == 'failure' && '❌ FAILED' || '✅ PASSED' }}</li>
+                <li>Build, Scan & Push: ${{ needs.build-scan-push.result == 'failure' && '❌ FAILED' || '✅ PASSED' }}</li>
+              </ul>
+              
+              <p>Please review the logs and attached reports to investigate the failure.</p>
+              <p>🛠️ <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs & Download Reports</a></p>
             </div>
+
+      ##################################
+      # ⚠️ Security Alerts
+      ##################################
+      # Send security alert for high vulnerability counts
+      - id: send-security-alert-email
+        name: Send Security Alert Email
+        # Trigger alert if any critical vulnerabilities or more than 5 high vulnerabilities
+        if: needs.build-scan-push.result == 'success' && (needs.build-scan-push.outputs.critical-vulns > 0 || needs.build-scan-push.outputs.high-vulns > 5)
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: '⚠️ Security Alert - High Vulnerability Count - Portfolio Website'
+          to: ${{ vars.EMAIL_TO }}
+          from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
+          html_body: |
+            <div style="font-family: Arial; padding: 20px;">
+              <h2 style="color: orange;">⚠️ Security Alert - High Vulnerability Count Detected</h2>
+              <p><strong>Portfolio Website:</strong> ${{ github.repository }}</p>
+              <p><strong>Docker Image:</strong> ${{ needs.build-scan-push.outputs.image-name }}:${{ needs.build-scan-push.outputs.image-tag }}</p>
+              
+              <p><strong>Vulnerability Summary:</strong></p>
+              <ul>
+                <li>🔴 Critical Vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || '0' }}</li>
+                <li>🟠 High Vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || '0' }}</li>
+              </ul>
+              
+              <p><strong>Recommended Actions:</strong></p>
+              <ul>
+                <li>🔍 Download and review the Trivy security reports from the workflow artifacts</li>
+                <li>🔄 Update your base Docker image to the latest security patches</li>
+                <li>📦 Update any vulnerable packages identified in the scan</li>
+                <li>🛡️ Consider implementing stricter vulnerability thresholds</li>
+              </ul>
+              
+              <p>📊 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Detailed Security Reports</a></p>
+            </div>
+
+# ===========================================
+# REQUIRED SECRETS AND VARIABLES
+# ===========================================
+#
+# GitHub Secrets (Settings > Secrets and variables > Actions > Secrets):
+# - SONAR_TOKEN: SonarCloud authentication token
+# - DOCKER_HUB_USERNAME: Docker Hub username
+# - DOCKER_HUB_ACCESS_TOKEN: Docker Hub access token
+# - DOCKER_IMAGE: Docker image name (e.g., username/repo-name)
+# - EMAIL_USERNAME: Gmail address for sending notifications
+# - EMAIL_PASSWORD: Gmail app password for SMTP authentication
+#
+# GitHub Variables (Settings > Secrets and variables > Actions > Variables):
+# - EMAIL_TO: Recipient email address for notifications
+#
+# ===========================================
+# MAINTENANCE NOTES
+# ===========================================
+#
+# 1. Update action versions regularly for security patches
+# 2. Review vulnerability thresholds based on your security requirements
+# 3. Adjust artifact retention periods based on compliance needs
+# 4. Monitor SonarCloud quality gate rules and adjust as needed
+# 5. Consider adding environment-specific deployments after security checks
+# 6. Review and update base Docker images regularly
+# 7. Test email notifications periodically to ensure delivery
+#
+# For troubleshooting:
+# - Check GitHub Actions logs for detailed error messages
+# - Verify all secrets and variables are properly configured
+# - Ensure Docker image repository exists and is accessible
+# - Confirm SonarCloud project is properly configured

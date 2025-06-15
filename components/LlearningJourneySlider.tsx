@@ -61,12 +61,13 @@ export const LearningJourneySlider: React.FunctionComponent = () => {
       icon: '☁️',
     },
     { date: 'April 2025', skill: 'AWS & its Services Deep Dive', icon: '🧠' },
+    { date: 'May 2025', skill: 'SonarQube & OWASP', icon: '🔍 🛡️' },
     {
-      date: 'May 2025',
-      skill: 'SonarQube, OWASP & HashiCorp Vault',
-      icon: '🔍 🛡️ 🔐',
+      date: 'June 2025',
+      skill: 'HashiCorp Vault & GitHub Actions',
+      icon: '🔐 🔧',
     },
-    { date: 'June 2025', skill: 'Python', icon: '🐍' },
+    { date: 'July 2025', skill: 'Python', icon: '🐍' },
     { date: getCurrentDate(), skill: 'Present Day', icon: '📍' },
   ];
 
