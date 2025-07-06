@@ -67,11 +67,15 @@ export const LearningJourneySlider: React.FunctionComponent = () => {
       skill: 'HashiCorp Vault & GitHub Actions',
       icon: '🔐 🔧',
     },
-    { date: 'July 2025', skill: 'Python', icon: '🐍' },
+    {
+      date: 'July 2025',
+      skill: 'DaisyUI & CircleCI',
+      icon: '⚙️ 🌼',
+    },
+    { date: 'Aujust 2025', skill: 'Python', icon: '🐍' },
     { date: getCurrentDate(), skill: 'Present Day', icon: '📍' },
   ];
 
-  // Responsive items per page
   const getItemsPerPage = (): 1 | 2 => {
     if (typeof window !== 'undefined') {
       if (window.innerWidth < 768) return 1; // Mobile

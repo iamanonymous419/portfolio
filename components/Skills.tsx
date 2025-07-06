@@ -40,6 +40,7 @@ export const SkillsSection: React.FunctionComponent = () => {
       { name: 'React', level: 90, icon: '⚛️' },
       { name: 'TypeScript', level: 85, icon: '🔷' },
       { name: 'ShadCN', level: 85, icon: '🎨' },
+      { name: 'DaisyUI', level: 40, icon: '🌼' },
       { name: 'Redux', level: 75, icon: '🔄' },
       { name: 'TanStack Query', level: 75, icon: '📊' },
       { name: 'JavaScript', level: 95, icon: '🟨' },
@@ -75,6 +76,7 @@ export const SkillsSection: React.FunctionComponent = () => {
       { name: 'SonarQube', level: 75, icon: '🔍' },
       { name: 'OWASP ZAP', level: 70, icon: '🛡️' },
       { name: 'GitHub Action', level: 55, icon: '⚙️' },
+      { name: 'CircleCI', level: 65, icon: '🔄' },
     ],
     Others: [
       { name: 'Next.js', level: 85, icon: '⚡' },
