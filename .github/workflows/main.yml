@@ -70,7 +70,8 @@ jobs:
           args: >
             -Dsonar.organization=iamanonymous419       
             -Dsonar.projectKey=iamanonymous419_portfolio 
-            -Dsonar.projectName=Portfolio              
+            -Dsonar.projectName=Portfolio
+            -Dsonar.exclusions=**/node_modules/**,**/.next/**,**/coverage/**,**/*.test.tsx,**/*.test.ts              
             -Dsonar.projectVersion=${{ github.sha }}   
             -Dsonar.sources=.
       # Quality gate check - fails pipeline if quality standards not met
