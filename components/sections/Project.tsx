@@ -6,6 +6,7 @@ import {
   Database,
   ExternalLink,
   Github,
+  LinkIcon,
   Package,
   User,
 } from 'lucide-react';
@@ -63,6 +64,15 @@ const Project: React.FunctionComponent = () => {
               link="https://github.com/iamanonymous419/marketverse-gitops"
               tags={['ArgoCD', 'Jenkins', 'Terraform', 'Ansible', 'Trivy']}
               icon={<Github className="h-4 w-4" />}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <ProjectCard
+              title="CircleCI DevOps Orbs"
+              description="Production-ready CircleCI Orbs for automating Docker workflows, static code analysis, and security scanning. Published to the Orb Registry with reusable components for docker, sonar, and trivy operations."
+              link="https://github.com/iamanonymous419/orbs"
+              tags={['CircleCI', 'Docker', 'SonarQube', 'Trivy', 'DevOps']}
+              icon={<LinkIcon className="h-4 w-4" />}
             />
           </StaggerItem>
           <StaggerItem>
