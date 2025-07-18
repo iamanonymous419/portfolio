@@ -14,6 +14,13 @@ RUN bun install
 # Copy project files
 COPY . .
 
+# Run format and lint
+RUN bun run format
+RUN bun run lint
+
+# Run tests
+RUN bun run test
+
 # Build the Next.js app
 RUN bun run build
 

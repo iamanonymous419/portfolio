@@ -84,7 +84,10 @@ make docker
 
 ```
 portfolio/
+|── __tests__/          # Test files and test utilities
+|── .github/            # GitHub workflows and configuration
 ├── components/         # Reusable React components
+├── hooks/              # Custom React hooks
 ├── app/                # Next.js pages and API routes
 ├── public/             # Static assets (images, icons, etc.)
 ├── lib/                # Utility functions and configurations
@@ -104,6 +107,7 @@ The project uses a Makefile for easy command execution:
 - `make build` - Build the project for production
 - `make start` - Start the production server
 - `make clean` - Clean build artifacts and dependencies
+- `make test` - To run the test's
 
 ## 📄 License
 

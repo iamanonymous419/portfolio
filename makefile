@@ -53,6 +53,18 @@ dev:
 	@echo "🚀 Running the project in development mode..."
 	bun run dev
 
+# Run the tests
+test:
+	@echo "🧪 Running tests..."
+	bun run test
+	@echo "✅ Tests completed!"
+
+# Watch for changes and run tests
+test-watch:
+	@echo "👀 Watching for changes and running tests..."
+	bun run test:watch
+	@echo "✅ Watching for changes and tests running!"
+
 # Start the project in production mode
 start:
 	@echo "🚀 Starting the project..."
@@ -68,7 +80,7 @@ production: build start
 # ------------------------------
 
 # Setup for bun environment
-setup: install format lint build start
+setup: install format lint test build start
 
 # for docker environment
 docker: compose-build compose-run
@@ -111,4 +123,4 @@ clean:
 # ✅ Mark targets as phony
 # ------------------------------
 .PHONY: default docker setup docker-build docker-image-push install format lint build dev start production \
-        compose-run compose-build compose-stop compose-down clean
+		test test-watch compose-run compose-build compose-stop compose-down clean
