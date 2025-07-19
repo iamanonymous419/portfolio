@@ -65,6 +65,12 @@ test-watch:
 	bun run test:watch
 	@echo "✅ Watching for changes and tests running!"
 
+# Generate test coverage report
+coverage:
+	@echo "📊 Generating test coverage report..."
+	bun run test:coverage
+	@echo "✅ Coverage report generated!"
+
 # Start the project in production mode
 start:
 	@echo "🚀 Starting the project..."
@@ -123,4 +129,4 @@ clean:
 # ✅ Mark targets as phony
 # ------------------------------
 .PHONY: default docker setup docker-build docker-image-push install format lint build dev start production \
-		test test-watch compose-run compose-build compose-stop compose-down clean
+		test test-watch coverage compose-run compose-build compose-stop compose-down clean

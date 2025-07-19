@@ -31,6 +31,7 @@
     "lint": "next lint",
     "format": "prettier --write .",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:watch": "jest --watch"
   },
   "author": {

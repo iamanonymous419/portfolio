@@ -57,6 +57,24 @@ jobs:
           fetch-depth: 0 # Full git history required for SonarCloud blame information
 
       ##################################
+      # 🔧 Setup Build Environment
+      ##################################
+      # Install Bun runtime for package management
+      - id: setup-bun
+        name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      # Install dependencies with Bun
+      - name: Install dependencies
+        run: bun install
+
+      # Run tests with coverage using Jest
+      - name: Run test coverage
+        run: bun run test:coverage
+
+      ##################################
       # 📊 SonarCloud Scan
       ##################################
       # SonarCloud code quality and security analysis
@@ -71,9 +89,13 @@ jobs:
             -Dsonar.organization=iamanonymous419       
             -Dsonar.projectKey=iamanonymous419_portfolio 
             -Dsonar.projectName=Portfolio
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx
             -Dsonar.exclusions=**/node_modules/**,**/.next/**,**/coverage/**,**/*.test.tsx,**/*.test.ts              
             -Dsonar.projectVersion=${{ github.sha }}   
             -Dsonar.sources=.
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
       # Quality gate check - fails pipeline if quality standards not met
       - id: sonarcloud-quality-gate-check
         name: SonarCloud Quality Gate check

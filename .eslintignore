@@ -1,0 +1,26 @@
+# Build and cache folders
+.next/
+out/
+dist/
+coverage/
+node_modules/
+
+# Environment files
+*.env
+*.env.local
+
+# Test files and coverage
+__tests__/
+*.test.ts
+*.test.tsx
+coverage/
+
+# TypeScript declaration files
+*.d.ts
+
+# Storybook (if using)
+.storybook/
+*.stories.tsx
+
+# Public/static assets
+public/
