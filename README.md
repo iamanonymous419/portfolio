@@ -6,6 +6,7 @@ A modern, responsive portfolio website built with Next.js and Bun, featuring a s
 
 - **Framework**: [Next.js](https://nextjs.org/) - React framework for production
 - **Runtime**: [Bun](https://bun.sh/) - Fast all-in-one JavaScript runtime
+- **Testing**: [Jest](https://jestjs.io/) – Unit & integration testing powered by [Node.js](https://nodejs.org/)
 - **Development**: Vibe coding approach with [v0](https://v0.dev/) AI assistance
 - **Styling**: Modern CSS/Tailwind CSS (depending on implementation)
 - **Deployment**: Optimized for modern hosting platforms
@@ -25,12 +26,15 @@ A modern, responsive portfolio website built with Next.js and Bun, featuring a s
 ### For Bun Environment:
 
 - [Bun](https://bun.sh/) installed on your system
-- Node.js (if required by specific dependencies)
+- [Node.js](https://nodejs.org/) installed — required for running Jest tests (Bun does **not** fully support Jest)
+  → Download from [https://nodejs.org](https://nodejs.org) or install via your system’s package manager (e.g., `apt`, `brew`, etc.)
 
 ### For Docker Environment:
 
 - [Docker](https://www.docker.com/) installed and running
-- Docker Compose (usually included with Docker Desktop)
+- ✅ **Install the newer Docker Compose v2 CLI** — used via `docker compose` (with a space)
+  🔗 Follow the official guide: [Install Docker Compose (v2)](https://docs.docker.com/compose/install/)
+  ❌ **Do not use** the older `docker-compose` (with a hyphen), which is now deprecated
 
 ## 🛠️ Quick Setup
 
