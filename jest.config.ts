@@ -10,9 +10,9 @@ const customJestConfig = {
   testPathIgnorePatterns: ['/node_modules/', '/.next/', '/coverage/', '/e2e/'],
 
   // 👇 Required for SonarCloud
-  collectCoverage: true,
-  coverageDirectory: 'coverage',
-  coverageReporters: ['lcov' as const, 'text' as const],
+  // collectCoverage: true,
+  // coverageDirectory: 'coverage',
+  // coverageReporters: ['lcov' as const, 'text' as const],
 
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',

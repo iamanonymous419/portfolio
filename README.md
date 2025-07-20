@@ -72,7 +72,6 @@ make docker
    ```
 
 2. **Choose your setup method**
-
    - For Bun: Run `make`
    - For Docker: Run `make docker`
 
