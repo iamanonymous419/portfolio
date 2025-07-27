@@ -72,7 +72,12 @@ export const LearningJourneySlider: React.FunctionComponent = () => {
       skill: 'DaisyUI & CircleCI',
       icon: '⚙️ 🌼',
     },
-    { date: 'Aujust 2025', skill: 'Python', icon: '🐍' },
+    {
+      date: 'August 2025',
+      skill: 'Nginx, Jest, EFK Stack & Slack',
+      icon: '🌐 🧪 🔍 📝 📊 💬',
+    },
+    { date: 'September 2025', skill: 'Python', icon: '🐍' },
     { date: getCurrentDate(), skill: 'Present Day', icon: '📍' },
   ];
 
