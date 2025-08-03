@@ -1,17 +1,15 @@
-# Use Bun official image
+# ----------------------------
+# 🏗️  Stage 1: Build stage
+# ----------------------------
 FROM oven/bun:alpine AS builder
 
-# Initialize a working directory
 WORKDIR /home/portfolio
 
-# Copy package.json and bun.lock to the working directory
-COPY package.json ./
-COPY bun.lock ./
-
-# Install dependencies
+# Copy package files and install all dependencies (dev + prod)
+COPY bun.lock package.json ./
 RUN bun install
 
-# Copy project files
+# Copy all source files
 COPY . .
 
 # Run format and lint
@@ -21,18 +19,37 @@ RUN bun run lint
 # Build the Next.js app
 RUN bun run build
 
-# Production image
+
+# ----------------------------
+# 🧹 Stage 2: Prune stage (production deps only)
+# ----------------------------
+FROM oven/bun:alpine AS prune
+
+WORKDIR /home/portfolio
+
+# Copy only package files
+COPY package.json bun.lock ./
+
+# Install only production dependencies
+RUN bun install --production
+
+
+# ----------------------------
+# 🚀 Stage 3: Final runner stage
+# ----------------------------
 FROM oven/bun:alpine AS runner
 
 WORKDIR /app
 
-# Copy build output and necessary files from builder
+# Copy production node_modules from prune stage
+COPY --from=prune /home/portfolio/node_modules ./node_modules
+
+# Copy only what's needed to run the app
 COPY --from=builder /home/portfolio/.next ./.next
-COPY --from=builder /home/portfolio/node_modules ./node_modules
 COPY --from=builder /home/portfolio/package.json .
 COPY --from=builder /home/portfolio/bun.lock .
 
-# Expose ports
+# Expose port
 EXPOSE 3000
 
 # Start the app
