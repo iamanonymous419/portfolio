@@ -454,7 +454,7 @@ jobs:
 
           # Update the image tag using sed
           # This will replace the tag value while preserving the YAML structure
-          sed -i "s/tag: \".*\"/tag: \"$NEW_TAG\"/" "$VALUES_FILE"
+          sed -i "s/^\(\s*tag:\s*\).*$/\1\"$NEW_TAG\"/" "$VALUES_FILE"
 
           # Verify the change was made
           echo "=== Updated values.yaml content ==="
