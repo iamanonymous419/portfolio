@@ -8,10 +8,9 @@ metadata:
     argocd.argoproj.io/refresh: "hard"
 spec:
   project: portfolio
-  description: Portfolio Application
   source:
     repoURL: https://github.com/iamanonymous419/portfolio
-    targetRevision: gitops
+    targetRevision: HEAD
     path: chart
     helm:
       valueFiles:
