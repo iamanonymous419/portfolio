@@ -437,29 +437,29 @@ jobs:
           # Get the new image tag from the previous job
           NEW_TAG="${{ needs.build-scan-push.outputs.image-tag }}"
           VALUES_FILE="chart/values.yaml"
-          
+
           echo "=== Updating Helm Chart Values ==="
           echo "File: $VALUES_FILE"
           echo "New tag: $NEW_TAG"
-          
+
           # Check if the values file exists
           if [ ! -f "$VALUES_FILE" ]; then
             echo "❌ Error: $VALUES_FILE not found!"
             exit 1
           fi
-          
+
           # Show current content
           echo "=== Current values.yaml content ==="
           cat "$VALUES_FILE"
-          
+
           # Update the image tag using sed
           # This will replace the tag value while preserving the YAML structure
           sed -i "s/tag: \".*\"/tag: \"$NEW_TAG\"/" "$VALUES_FILE"
-          
+
           # Verify the change was made
           echo "=== Updated values.yaml content ==="
           cat "$VALUES_FILE"
-          
+
           # Check if the file actually changed
           if git diff --quiet "$VALUES_FILE"; then
             echo "⚠️ Warning: No changes detected in $VALUES_FILE"
@@ -482,10 +482,10 @@ jobs:
         if: env.CHART_UPDATED == 'true'
         run: |
           NEW_TAG="${{ needs.build-scan-push.outputs.image-tag }}"
-          
+
           # Add the changed file
           git add chart/values.yaml
-          
+
           # Create commit with detailed message
           git commit -m "🚀 Update image tag to $NEW_TAG
 
@@ -493,17 +493,17 @@ jobs:
           - Image: ${{ secrets.DOCKER_IMAGE }}:$NEW_TAG
           - Triggered by commit: ${{ github.sha }}
           - DevSecOps pipeline completed successfully
-          
+
           Security Summary:
           - Critical vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}
           - High vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}
-          
+
           Co-authored-by: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>"
-          
+
           # Push the changes
           echo "Pushing changes to repository..."
           git push origin main
-          
+
           echo "✅ Successfully committed and pushed chart updates"
 
       ##################################
@@ -516,7 +516,7 @@ jobs:
         run: |
           NEW_TAG="${{ needs.build-scan-push.outputs.image-tag }}"
           GIT_TAG="deploy-$NEW_TAG"
-          
+
           # Create and push the tag
           git tag -a "$GIT_TAG" -m "Deployment tag for image ${{ secrets.DOCKER_IMAGE }}:$NEW_TAG
 
@@ -524,14 +524,14 @@ jobs:
           - Docker Image: ${{ secrets.DOCKER_IMAGE }}:$NEW_TAG
           - Commit: ${{ github.sha }}
           - Pipeline Run: ${{ github.run_id }}
-          
+
           Security Scans Passed:
           - SonarCloud Quality Gate ✅
           - OWASP Dependency Check ✅
           - Trivy Container Scan ✅"
-          
+
           git push origin "$GIT_TAG"
-          
+
           echo "✅ Created and pushed git tag: $GIT_TAG"
 
   ##################################
@@ -541,7 +541,8 @@ jobs:
     name: Security Report Summary
     runs-on: ubuntu-latest
     # Run after all security jobs, regardless of their outcome
-    needs: [static-analysis, dependency-security, build-scan-push, update-helm-chart]
+    needs:
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
     if: always()
 
     steps:
@@ -616,7 +617,8 @@ jobs:
     name: Send Notifications
     runs-on: ubuntu-latest
     # Run after all main jobs complete
-    needs: [static-analysis, dependency-security, build-scan-push, update-helm-chart]
+    needs:
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
     if: always()
 
     steps:

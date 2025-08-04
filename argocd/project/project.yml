@@ -1,18 +1,18 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
-  name: portfolio 
+  name: portfolio
   namespace: argocd
 spec:
   description: portfolio Application
-  
+
   sourceRepos:
     - 'https://github.com/iamanonymous419/portfolio'
-  
+
   destinations:
     - namespace: portfolio
       server: https://kubernetes.default.svc
-  
+
   clusterResourceWhitelist:
     - group: ''
       kind: Namespace
@@ -22,7 +22,7 @@ spec:
       kind: ClusterRoleBinding
     - group: 'cert-manager.io'
       kind: ClusterIssuer
-  
+
   namespaceResourceWhitelist:
     - group: ''
       kind: ConfigMap
@@ -41,4 +41,4 @@ spec:
     - group: 'autoscaling'
       kind: HorizontalPodAutoscaler
     - group: 'policy'
-      kind: PodDisruptionBudget 
+      kind: PodDisruptionBudget
