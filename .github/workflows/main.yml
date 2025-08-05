@@ -623,7 +623,6 @@ jobs:
         dependency-security,
         build-scan-push,
         update-helm-chart,
-        security-report,
       ]
     if: always()
 
@@ -1006,7 +1005,6 @@ jobs:
         dependency-security,
         build-scan-push,
         update-helm-chart,
-        deployment-summary,
       ]
     if: always()
 
