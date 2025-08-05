@@ -207,7 +207,7 @@ describe('Project Component', () => {
         .closest('[data-testid="project-card"]');
       expect(marketverseCard).toHaveAttribute(
         'data-link',
-        'https://marketverse-phi.vercel.app'
+        'https://marketverse.iamanonymous.in'
       );
     });
 
