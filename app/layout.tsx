@@ -35,7 +35,7 @@ export default function RootLayout({
       <body
         className={cn(
           inter.variable,
-           poppins.variable,
+          poppins.variable,
           'font-sans antialiased'
         )}
       >

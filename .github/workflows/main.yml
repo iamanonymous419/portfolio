@@ -97,6 +97,7 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
+
       # Quality gate check - fails pipeline if quality standards not met
       - id: sonarcloud-quality-gate-check
         name: SonarCloud Quality Gate check
@@ -618,12 +619,7 @@ jobs:
     runs-on: ubuntu-latest
     # Run after all jobs complete, regardless of their outcome
     needs:
-      [
-        static-analysis,
-        dependency-security,
-        build-scan-push,
-        update-helm-chart,
-      ]
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
     if: always()
 
     steps:
@@ -655,7 +651,6 @@ jobs:
           echo "| 🛡️ Dependency Security | $([ "${{ needs.dependency-security.result }}" == "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") | - |" >> $GITHUB_STEP_SUMMARY
           echo "| 🐳 Build, Scan & Push | $([ "${{ needs.build-scan-push.result }}" == "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") | - |" >> $GITHUB_STEP_SUMMARY
           echo "| 📈 Helm Chart Update | $([ "${{ needs.update-helm-chart.result }}" == "success" ] && echo "✅ SUCCESS" || ([ "${{ needs.update-helm-chart.result }}" == "skipped" ] && echo "⏭️ SKIPPED" || echo "❌ FAILED")) | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📊 Security Report | $([ "${{ needs.security-report.result }}" == "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") | - |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Overall Status
@@ -816,6 +811,9 @@ jobs:
             echo "- [ ] **Check SonarCloud:** Review quality gate rules and project configuration" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
+
+          # Container Security Details (only show if build was successful)
+          if [ "${{ needs.build-scan-push.result }}" == "success" ]; then
             echo "### 🐳 Container Security Details" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Docker Image:** \`${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag || 'latest' }}\`" >> $GITHUB_STEP_SUMMARY
@@ -1000,12 +998,7 @@ jobs:
     runs-on: ubuntu-latest
     # Run after all main jobs complete
     needs:
-      [
-        static-analysis,
-        dependency-security,
-        build-scan-push,
-        update-helm-chart,
-      ]
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
     if: always()
 
     steps:
