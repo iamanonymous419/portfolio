@@ -34,7 +34,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className="dark">
       <body
         className={cn(
-          inter.variable,
+              inter.variable,
           poppins.variable,
           'font-sans antialiased'
         )}
