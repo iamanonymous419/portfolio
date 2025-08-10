@@ -6,6 +6,7 @@
 # - Container security scanning (Trivy)
 # - Automated notifications
 # - Security report aggregation
+# - Helm chart image tag updates
 
 ---
 name: DevSecOps CI Pipeline - Portfolio Website
@@ -34,7 +35,7 @@ on:
 # --------------------
 # Minimal permissions following principle of least privilege
 permissions:
-  contents: read # Read repository contents
+  contents: write # Changed from 'read' to 'write' to allow commits
   security-events: write # Upload security scan results to GitHub Security tab
 
 jobs:
@@ -96,6 +97,7 @@ jobs:
             -Dsonar.sources=.
             -Dsonar.sourceEncoding=UTF-8
             -Dsonar.typescript.lcov.reportPaths=coverage/lcov.info
+
       # Quality gate check - fails pipeline if quality standards not met
       - id: sonarcloud-quality-gate-check
         name: SonarCloud Quality Gate check
@@ -203,6 +205,8 @@ jobs:
       - id: checkout-code
         name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       ##################################
       # 🏷️ Generate Tags
@@ -392,13 +396,154 @@ jobs:
           retention-days: 30
 
   ##################################
+  # 📈 UPDATE HELM CHART VALUES
+  ##################################
+  update-helm-chart:
+    name: Update Helm Chart Image Tag
+    runs-on: ubuntu-latest
+    # Only run if build and security scans are successful
+    needs: [build-scan-push]
+    # Only run on main branch pushes (not PRs)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      ##################################
+      # 🔽 Checkout Code
+      ##################################
+      # Checkout code with write permissions
+      - id: checkout-code
+        name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      ##################################
+      # 🔧 Setup Git Configuration
+      ##################################
+      # Configure Git for automated commits
+      - id: configure-git
+        name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      ##################################
+      # 📝 Update Helm Values File
+      ##################################
+      # Update the image tag in chart/values.yaml
+      - id: update-helm-values
+        name: Update Helm Chart Values
+        run: |
+          # Get the new image tag from the previous job
+          NEW_TAG="${{ needs.build-scan-push.outputs.image-tag }}"
+          VALUES_FILE="chart/values.yaml"
+
+          echo "=== Updating Helm Chart Values ==="
+          echo "File: $VALUES_FILE"
+          echo "New tag: $NEW_TAG"
+
+          # Check if the values file exists
+          if [ ! -f "$VALUES_FILE" ]; then
+            echo "❌ Error: $VALUES_FILE not found!"
+            exit 1
+          fi
+
+          # Show current content
+          echo "=== Current values.yaml content ==="
+          cat "$VALUES_FILE"
+
+          # Update the image tag using sed
+          # This will replace the tag value while preserving the YAML structure
+          sed -i "s/^\(\s*tag:\s*\).*$/\1\"$NEW_TAG\"/" "$VALUES_FILE"
+
+          # Verify the change was made
+          echo "=== Updated values.yaml content ==="
+          cat "$VALUES_FILE"
+
+          # Check if the file actually changed
+          if git diff --quiet "$VALUES_FILE"; then
+            echo "⚠️ Warning: No changes detected in $VALUES_FILE"
+            echo "CHART_UPDATED=false" >> $GITHUB_ENV
+          else
+            echo "✅ Successfully updated image tag in $VALUES_FILE"
+            echo "CHART_UPDATED=true" >> $GITHUB_ENV
+            
+            # Show the diff
+            echo "=== Changes made ==="
+            git diff "$VALUES_FILE"
+          fi
+
+      ##################################
+      # 💾 Commit and Push Changes
+      ##################################
+      # Commit the updated values file and push to repository
+      - id: commit-and-push-changes
+        name: Commit and Push Changes
+        if: env.CHART_UPDATED == 'true'
+        run: |
+          NEW_TAG="${{ needs.build-scan-push.outputs.image-tag }}"
+
+          # Add the changed file
+          git add chart/values.yaml
+
+          # Create commit with detailed message
+          git commit -m "🚀 Update image tag to $NEW_TAG
+
+          - Updated chart/values.yaml with new Docker image tag
+          - Image: ${{ secrets.DOCKER_IMAGE }}:$NEW_TAG
+          - Triggered by commit: ${{ github.sha }}
+          - DevSecOps pipeline completed successfully
+
+          Security Summary:
+          - Critical vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}
+          - High vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}
+
+          Co-authored-by: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>"
+
+          # Push the changes
+          echo "Pushing changes to repository..."
+          git push origin main
+
+          echo "✅ Successfully committed and pushed chart updates"
+
+      ##################################
+      # 🏷️ Create Git Tag
+      ##################################
+      # Create a git tag for this deployment
+      - id: create-git-tag
+        name: Create Git Tag
+        if: env.CHART_UPDATED == 'true'
+        run: |
+          NEW_TAG="${{ needs.build-scan-push.outputs.image-tag }}"
+          GIT_TAG="deploy-$NEW_TAG"
+
+          # Create and push the tag
+          git tag -a "$GIT_TAG" -m "Deployment tag for image ${{ secrets.DOCKER_IMAGE }}:$NEW_TAG
+
+          This tag marks the deployment of:
+          - Docker Image: ${{ secrets.DOCKER_IMAGE }}:$NEW_TAG
+          - Commit: ${{ github.sha }}
+          - Pipeline Run: ${{ github.run_id }}
+
+          Security Scans Passed:
+          - SonarCloud Quality Gate ✅
+          - OWASP Dependency Check ✅
+          - Trivy Container Scan ✅"
+
+          git push origin "$GIT_TAG"
+
+          echo "✅ Created and pushed git tag: $GIT_TAG"
+
+  ##################################
   # 📊 SECURITY REPORT AGGREGATION
   ##################################
   security-report:
     name: Security Report Summary
     runs-on: ubuntu-latest
     # Run after all security jobs, regardless of their outcome
-    needs: [static-analysis, dependency-security, build-scan-push]
+    needs:
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
     if: always()
 
     steps:
@@ -424,6 +569,7 @@ jobs:
           echo "- **Static Analysis**: ${{ needs.static-analysis.result }}" >> security-summary.md
           echo "- **Dependency Security**: ${{ needs.dependency-security.result }}" >> security-summary.md
           echo "- **Build, Scan & Push**: ${{ needs.build-scan-push.result }}" >> security-summary.md
+          echo "- **Helm Chart Update**: ${{ needs.update-helm-chart.result }}" >> security-summary.md
           echo "" >> security-summary.md
 
           echo "## Security Scan Results" >> security-summary.md
@@ -433,17 +579,24 @@ jobs:
           echo "" >> security-summary.md
 
           echo "## Container Security Details" >> security-summary.md
-          echo "- Scanned Image: ${{ needs.build-scan-push.outputs.image-name }}:${{ needs.build-scan-push.outputs.image-tag }}" >> security-summary.md
+          echo "- Scanned Image: ${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag }}" >> security-summary.md
           echo "- Critical Vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}" >> security-summary.md
           echo "- High Vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}" >> security-summary.md
           echo "- Scan focused on CRITICAL, HIGH, MEDIUM, and LOW severity vulnerabilities" >> security-summary.md
           echo "- Check the artifacts for detailed vulnerability reports" >> security-summary.md
           echo "" >> security-summary.md
 
+          echo "## Deployment Information" >> security-summary.md
+          echo "- Helm Chart Updated: $([ "${{ needs.update-helm-chart.result }}" == "success" ] && echo "✅ YES" || echo "❌ NO")" >> security-summary.md
+          echo "- New Image Tag: ${{ needs.build-scan-push.outputs.image-tag }}" >> security-summary.md
+          echo "- Chart Location: chart/values.yaml" >> security-summary.md
+          echo "" >> security-summary.md
+
           echo "## Next Steps" >> security-summary.md
           echo "1. Review vulnerability reports in the artifacts" >> security-summary.md
           echo "2. Update base images and dependencies for any critical vulnerabilities" >> security-summary.md
           echo "3. Consider implementing vulnerability thresholds for future builds" >> security-summary.md
+          echo "4. Deploy the updated Helm chart to your Kubernetes cluster" >> security-summary.md
 
       ##################################
       # 📤 Upload Summary
@@ -459,13 +612,393 @@ jobs:
           retention-days: 30
 
   ##################################
+  # 📊 DEPLOYMENT SUMMARY
+  ##################################
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    # Run after all jobs complete, regardless of their outcome
+    needs:
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
+    if: always()
+
+    steps:
+      ##################################
+      # 📋 Generate Deployment Summary
+      ##################################
+      # Create comprehensive deployment summary for GitHub Actions UI
+      - id: create-deployment-summary
+        name: Create Deployment Summary
+        run: |
+          echo "## 🚀 DevSecOps Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Basic Information
+          echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Pipeline Status Overview
+          echo "### 📊 Pipeline Status Overview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Static Analysis | $([ "${{ needs.static-analysis.result }}" == "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🛡️ Dependency Security | $([ "${{ needs.dependency-security.result }}" == "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🐳 Build, Scan & Push | $([ "${{ needs.build-scan-push.result }}" == "success" ] && echo "✅ SUCCESS" || echo "❌ FAILED") | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📈 Helm Chart Update | $([ "${{ needs.update-helm-chart.result }}" == "success" ] && echo "✅ SUCCESS" || ([ "${{ needs.update-helm-chart.result }}" == "skipped" ] && echo "⏭️ SKIPPED" || echo "❌ FAILED")) | - |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Overall Status
+          OVERALL_STATUS="SUCCESS"
+          FAILURE_REASONS=()
+
+          # Check each job and collect failure reasons
+          if [ "${{ needs.static-analysis.result }}" != "success" ]; then
+            OVERALL_STATUS="FAILED"
+            FAILURE_REASONS+=("Static Analysis")
+          fi
+          if [ "${{ needs.dependency-security.result }}" != "success" ]; then
+            OVERALL_STATUS="FAILED"
+            FAILURE_REASONS+=("Dependency Security")
+          fi
+          if [ "${{ needs.build-scan-push.result }}" != "success" ]; then
+            OVERALL_STATUS="FAILED"
+            FAILURE_REASONS+=("Build & Container Scan")
+          fi
+          if [ "${{ needs.update-helm-chart.result }}" == "failure" ]; then
+            OVERALL_STATUS="FAILED"
+            FAILURE_REASONS+=("Helm Chart Update")
+          fi
+
+          if [ "$OVERALL_STATUS" == "SUCCESS" ]; then
+            echo "### ✅ Overall Status: **DEPLOYMENT SUCCESSFUL**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 **All security checks passed and deployment artifacts are ready!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Overall Status: **DEPLOYMENT FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🚨 **Pipeline failed in the following stages:**" >> $GITHUB_STEP_SUMMARY
+            for reason in "${FAILURE_REASONS[@]}"; do
+              echo "- ❌ $reason" >> $GITHUB_STEP_SUMMARY
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **No deployment artifacts were created due to security or quality failures.**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Security Scan Results with Failure Details
+          echo "### 🛡️ Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Check | Result | Details | Action Required |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------------|--------|---------|-----------------|" >> $GITHUB_STEP_SUMMARY
+
+          # SonarCloud Results
+          if [ "${{ needs.static-analysis.result }}" == "success" ]; then
+            echo "| SonarCloud Quality Gate | ✅ PASSED | Code quality & security analysis | None |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| SonarCloud Quality Gate | ❌ FAILED | Code quality issues detected | Fix code quality/security issues |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # OWASP Dependency Check
+          if [ "${{ needs.dependency-security.result }}" == "success" ]; then
+            echo "| OWASP Dependency Check | ✅ COMPLETED | Vulnerability scanning | Review reports |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| OWASP Dependency Check | ❌ FAILED | Dependency scan failed | Check dependency configuration |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Bun Security Audit
+          if [ "${{ needs.dependency-security.result }}" == "success" ]; then
+            echo "| Bun Security Audit | ✅ COMPLETED | Package security audit | Review audit results |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Bun Security Audit | ❌ FAILED | Package audit failed | Check package.json and dependencies |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Trivy Container Scan
+          if [ "${{ needs.build-scan-push.result }}" == "success" ]; then
+            echo "| Trivy Container Scan | ✅ COMPLETED | Container image security | Review vulnerability reports |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Trivy Container Scan | ❌ FAILED | Container build/scan failed | Check Docker build and registry access |" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Failure Analysis Section
+          if [ "$OVERALL_STATUS" == "FAILED" ]; then
+            echo "### 🔍 Failure Analysis & Troubleshooting" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Static Analysis Failures
+            if [ "${{ needs.static-analysis.result }}" != "success" ]; then
+              echo "#### ❌ Static Analysis Failed" >> $GITHUB_STEP_SUMMARY
+              echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
+              echo "- SonarCloud quality gate not met (code coverage, duplication, maintainability)" >> $GITHUB_STEP_SUMMARY
+              echo "- Security vulnerabilities detected in code" >> $GITHUB_STEP_SUMMARY
+              echo "- Code smells or technical debt above threshold" >> $GITHUB_STEP_SUMMARY
+              echo "- Missing or invalid SONAR_TOKEN secret" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Fix steps:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Check [SonarCloud dashboard](https://sonarcloud.io) for detailed issues" >> $GITHUB_STEP_SUMMARY
+              echo "2. Fix code quality issues and security hotspots" >> $GITHUB_STEP_SUMMARY
+              echo "3. Increase test coverage if below threshold" >> $GITHUB_STEP_SUMMARY
+              echo "4. Verify SonarCloud project configuration" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            # Dependency Security Failures
+            if [ "${{ needs.dependency-security.result }}" != "success" ]; then
+              echo "#### ❌ Dependency Security Failed" >> $GITHUB_STEP_SUMMARY
+              echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
+              echo "- High-severity vulnerabilities in dependencies" >> $GITHUB_STEP_SUMMARY
+              echo "- OWASP dependency check configuration issues" >> $GITHUB_STEP_SUMMARY
+              echo "- Bun installation or audit command failures" >> $GITHUB_STEP_SUMMARY
+              echo "- Network issues downloading vulnerability database" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Fix steps:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Run \`bun audit\` locally to see specific vulnerabilities" >> $GITHUB_STEP_SUMMARY
+              echo "2. Update vulnerable dependencies: \`bun update\`" >> $GITHUB_STEP_SUMMARY
+              echo "3. Check for alternative packages if updates unavailable" >> $GITHUB_STEP_SUMMARY
+              echo "4. Review OWASP dependency check logs for configuration issues" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            # Build and Container Scan Failures
+            if [ "${{ needs.build-scan-push.result }}" != "success" ]; then
+              echo "#### ❌ Build, Scan & Push Failed" >> $GITHUB_STEP_SUMMARY
+              echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
+              echo "- Docker build failures (missing files, syntax errors)" >> $GITHUB_STEP_SUMMARY
+              echo "- Docker Hub authentication issues" >> $GITHUB_STEP_SUMMARY
+              echo "- Registry push failures (network, permissions)" >> $GITHUB_STEP_SUMMARY
+              echo "- Trivy scanner configuration or execution errors" >> $GITHUB_STEP_SUMMARY
+              echo "- Invalid or missing Docker secrets" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Fix steps:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Verify Dockerfile syntax and build context" >> $GITHUB_STEP_SUMMARY
+              echo "2. Check Docker Hub credentials (DOCKER_HUB_USERNAME, DOCKER_HUB_ACCESS_TOKEN)" >> $GITHUB_STEP_SUMMARY
+              echo "3. Verify DOCKER_IMAGE secret format (username/repository)" >> $GITHUB_STEP_SUMMARY
+              echo "4. Test local Docker build: \`docker build -t test .\`" >> $GITHUB_STEP_SUMMARY
+              echo "5. Check Docker Hub repository exists and has write permissions" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            # Helm Chart Update Failures
+            if [ "${{ needs.update-helm-chart.result }}" == "failure" ]; then
+              echo "#### ❌ Helm Chart Update Failed" >> $GITHUB_STEP_SUMMARY
+              echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
+              echo "- Missing chart/values.yaml file" >> $GITHUB_STEP_SUMMARY
+              echo "- Git permissions issues for automated commits" >> $GITHUB_STEP_SUMMARY
+              echo "- Invalid YAML syntax in values file" >> $GITHUB_STEP_SUMMARY
+              echo "- Concurrent git operations causing conflicts" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "**Fix steps:**" >> $GITHUB_STEP_SUMMARY
+              echo "1. Verify chart/values.yaml exists and has correct structure" >> $GITHUB_STEP_SUMMARY
+              echo "2. Check repository permissions for GitHub Actions" >> $GITHUB_STEP_SUMMARY
+              echo "3. Ensure GITHUB_TOKEN has write permissions" >> $GITHUB_STEP_SUMMARY
+              echo "4. Review git configuration in the workflow" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            echo "### 🛠️ Quick Fixes Checklist" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] **Check all secrets are configured:** SONAR_TOKEN, DOCKER_HUB_*, EMAIL_*" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] **Verify repository permissions:** Contents: write, Security-events: write" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] **Test locally:** Run tests, build Docker image, check Helm chart" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] **Review logs:** Check individual job logs for specific error messages" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] **Update dependencies:** Run \`bun update\` and \`bun audit\`" >> $GITHUB_STEP_SUMMARY
+            echo "- [ ] **Check SonarCloud:** Review quality gate rules and project configuration" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Container Security Details (only show if build was successful)
+          if [ "${{ needs.build-scan-push.result }}" == "success" ]; then
+            echo "### 🐳 Container Security Details" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Docker Image:** \`${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag || 'latest' }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Registry:** Docker Hub" >> $GITHUB_STEP_SUMMARY
+            echo "**Architectures:** linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Vulnerability Summary:**" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔴 **Critical:** ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟠 **High:** ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- ℹ️ Detailed reports available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Deployment Information
+          echo "### 📦 Deployment Information" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.update-helm-chart.result }}" == "success" ]; then
+            echo "**Helm Chart Status:** ✅ Updated successfully" >> $GITHUB_STEP_SUMMARY
+            echo "**Chart Location:** \`chart/values.yaml\`" >> $GITHUB_STEP_SUMMARY
+            echo "**New Image Tag:** \`${{ needs.build-scan-push.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Git Tag Created:** \`deploy-${{ needs.build-scan-push.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎯 **Ready for Kubernetes deployment with updated Helm chart**" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ needs.update-helm-chart.result }}" == "skipped" ]; then
+            echo "**Helm Chart Status:** ⏭️ Skipped (PR or non-main branch)" >> $GITHUB_STEP_SUMMARY
+            echo "**Image Built:** \`${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "ℹ️ **Helm chart will be updated on main branch merge**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Helm Chart Status:** ❌ Update failed" >> $GITHUB_STEP_SUMMARY
+            echo "**Manual Action Required:** Review chart/values.yaml" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Actions Completed / Failed
+          if [ "$OVERALL_STATUS" == "SUCCESS" ]; then
+            echo "### ✅ Actions Completed Successfully" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔍 **Static code analysis** - SonarCloud quality gate passed" >> $GITHUB_STEP_SUMMARY
+            echo "- 🛡️ **Security vulnerability scanning** - OWASP & Bun audit completed" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔨 **Multi-architecture Docker build** - Built for AMD64 & ARM64" >> $GITHUB_STEP_SUMMARY
+            echo "- 📤 **Container registry push** - Images pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔍 **Container security scan** - Trivy vulnerability analysis" >> $GITHUB_STEP_SUMMARY
+            echo "- 📊 **Security reports generated** - Available in workflow artifacts" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ needs.update-helm-chart.result }}" == "success" ]; then
+              echo "- 📝 **Helm chart updated** - Ready for Kubernetes deployment" >> $GITHUB_STEP_SUMMARY
+              echo "- 🏷️ **Git tag created** - Deployment tracking enabled" >> $GITHUB_STEP_SUMMARY
+              echo "- 💾 **Changes committed** - Automated GitOps workflow" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ❌ Pipeline Execution Summary" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Show what succeeded
+            SUCCEEDED_STEPS=()
+            if [ "${{ needs.static-analysis.result }}" == "success" ]; then
+              SUCCEEDED_STEPS+=("✅ Static code analysis completed")
+            else
+              SUCCEEDED_STEPS+=("❌ Static code analysis failed")
+            fi
+            
+            if [ "${{ needs.dependency-security.result }}" == "success" ]; then
+              SUCCEEDED_STEPS+=("✅ Dependency security scanning completed")
+            else
+              SUCCEEDED_STEPS+=("❌ Dependency security scanning failed")
+            fi
+            
+            if [ "${{ needs.build-scan-push.result }}" == "success" ]; then
+              SUCCEEDED_STEPS+=("✅ Docker build and container scanning completed")
+            else
+              SUCCEEDED_STEPS+=("❌ Docker build and container scanning failed")
+            fi
+            
+            if [ "${{ needs.update-helm-chart.result }}" == "success" ]; then
+              SUCCEEDED_STEPS+=("✅ Helm chart update completed")
+            elif [ "${{ needs.update-helm-chart.result }}" == "failure" ]; then
+              SUCCEEDED_STEPS+=("❌ Helm chart update failed")
+            else
+              SUCCEEDED_STEPS+=("⏭️ Helm chart update skipped (not main branch)")
+            fi
+            
+            for step in "${SUCCEEDED_STEPS[@]}"; do
+              echo "- $step" >> $GITHUB_STEP_SUMMARY
+            done
+            
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **No deployment artifacts created due to pipeline failures.**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Next Steps - Enhanced for failures
+          echo "### 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$OVERALL_STATUS" == "SUCCESS" ]; then
+            if [ "${{ needs.update-helm-chart.result }}" == "success" ]; then
+              echo "#### ✅ Ready for Production Deployment" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "1. **Deploy to Kubernetes:** Use the updated Helm chart" >> $GITHUB_STEP_SUMMARY
+              echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+              echo "   helm upgrade --install portfolio ./chart" >> $GITHUB_STEP_SUMMARY
+              echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+              echo "2. **Monitor deployment:** Check application health and metrics" >> $GITHUB_STEP_SUMMARY
+              echo "3. **Review security reports:** Download artifacts for detailed analysis" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "#### ⏭️ Staging Environment Ready" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "1. **Merge to main branch:** To trigger Helm chart update" >> $GITHUB_STEP_SUMMARY
+              echo "2. **Review security reports:** Download artifacts for analysis" >> $GITHUB_STEP_SUMMARY
+              echo "3. **Deploy manually:** Use image \`${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            # Security recommendations
+            CRITICAL_VULNS="${{ needs.build-scan-push.outputs.critical-vulns }}"
+            HIGH_VULNS="${{ needs.build-scan-push.outputs.high-vulns }}"
+            if [ "$CRITICAL_VULNS" -gt 0 ] 2>/dev/null || [ "$HIGH_VULNS" -gt 5 ] 2>/dev/null; then
+              echo "4. **🚨 Security Action Required:**" >> $GITHUB_STEP_SUMMARY
+              echo "   - Review Trivy security reports immediately" >> $GITHUB_STEP_SUMMARY
+              echo "   - Update base images and vulnerable dependencies" >> $GITHUB_STEP_SUMMARY
+              echo "   - Consider delaying deployment until critical issues are resolved" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "#### 🛠️ Immediate Actions Required" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Priority 1: Fix Pipeline Failures**" >> $GITHUB_STEP_SUMMARY
+            for reason in "${FAILURE_REASONS[@]}"; do
+              case $reason in
+                "Static Analysis")
+                  echo "- 🔍 **Fix SonarCloud issues:** Check quality gate failures and security hotspots" >> $GITHUB_STEP_SUMMARY
+                  ;;
+                "Dependency Security")
+                  echo "- 🛡️ **Update vulnerable dependencies:** Run \`bun audit\` and update packages" >> $GITHUB_STEP_SUMMARY
+                  ;;
+                "Build & Container Scan")
+                  echo "- 🐳 **Fix Docker build:** Check Dockerfile, secrets, and registry access" >> $GITHUB_STEP_SUMMARY
+                  ;;
+                "Helm Chart Update")
+                  echo "- 📝 **Fix Helm configuration:** Verify chart/values.yaml and git permissions" >> $GITHUB_STEP_SUMMARY
+                  ;;
+              esac
+            done
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "**Priority 2: Verify Configuration**" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔑 **Check secrets:** Ensure all required secrets are configured correctly" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔧 **Test locally:** Reproduce the build process on your development machine" >> $GITHUB_STEP_SUMMARY
+            echo "- 📋 **Review logs:** Download and analyze failed job logs for specific errors" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "**Priority 3: Re-run Pipeline**" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔄 **After fixes:** Push changes or manually trigger workflow" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ **Verify success:** Ensure all jobs complete successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- 🚀 **Then proceed:** With deployment steps above" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            echo "**🆘 Need Help?**" >> $GITHUB_STEP_SUMMARY
+            echo "- 📚 Check the pipeline documentation in the repository" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔍 Review individual job logs for detailed error messages" >> $GITHUB_STEP_SUMMARY
+            echo "- 💬 Contact your DevOps team for assistance with failed components" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Artifacts and Reports
+          echo "### 📁 Available Artifacts & Reports" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 **Security Summary** - Comprehensive security analysis report" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔍 **Dependency Security Reports** - OWASP and Bun audit results" >> $GITHUB_STEP_SUMMARY
+          echo "- 🐳 **Container Security Reports** - Trivy vulnerability scans (SARIF & Table)" >> $GITHUB_STEP_SUMMARY
+          echo "- 📈 **Code Quality Reports** - Available in SonarCloud dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "💡 **Tip:** Download artifacts from the workflow run page for offline analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Footer
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Pipeline summary generated at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
+
+  ##################################
   # 📧 NOTIFICATION SYSTEM
   ##################################
   notification:
     name: Send Notifications
     runs-on: ubuntu-latest
     # Run after all main jobs complete
-    needs: [static-analysis, dependency-security, build-scan-push]
+    needs:
+      [static-analysis, dependency-security, build-scan-push, update-helm-chart]
     if: always()
 
     steps:
@@ -493,7 +1026,7 @@ jobs:
               <p><strong>Portfolio Website:</strong> ${{ github.repository }}</p>
               <p><strong>Triggered by:</strong> ${{ github.actor }}</p>
               <p><strong>Commit:</strong> <code>${{ github.sha }}</code></p>
-              <p><strong>Docker Image:</strong> ${{ needs.build-scan-push.outputs.image-name }}:${{ needs.build-scan-push.outputs.image-tag }}</p>
+              <p><strong>Docker Image:</strong> ${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag }}</p>
               
               <p><strong>DevSecOps Security Checks Completed:</strong></p>
               <ul>
@@ -507,6 +1040,12 @@ jobs:
               <ul>
                 <li>Critical Vulnerabilities: ${{ needs.build-scan-push.outputs.critical-vulns || 'N/A' }}</li>
                 <li>High Vulnerabilities: ${{ needs.build-scan-push.outputs.high-vulns || 'N/A' }}</li>
+              </ul>
+
+              <p><strong>Deployment Updates:</strong></p>
+              <ul>
+                <li>Helm Chart Updated: $([ "${{ needs.update-helm-chart.result }}" == "success" ] && echo "✅ YES" || echo "❌ NO")</li>
+                <li>Ready for Kubernetes deployment with new image tag</li>
               </ul>
               
               <p>📝 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Full Logs & Download Reports</a></p>
@@ -541,6 +1080,7 @@ jobs:
                 <li>Static Analysis: ${{ needs.static-analysis.result == 'failure' && '❌ FAILED' || '✅ PASSED' }}</li>
                 <li>Dependency Security: ${{ needs.dependency-security.result == 'failure' && '❌ FAILED' || '✅ PASSED' }}</li>
                 <li>Build, Scan & Push: ${{ needs.build-scan-push.result == 'failure' && '❌ FAILED' || '✅ PASSED' }}</li>
+                <li>Helm Chart Update: ${{ needs.update-helm-chart.result == 'failure' && '❌ FAILED' || (needs.update-helm-chart.result == 'success' && '✅ PASSED' || '⏭️ SKIPPED') }}</li>
               </ul>
               
               <p>Please review the logs and attached reports to investigate the failure.</p>
@@ -569,7 +1109,7 @@ jobs:
             <div style="font-family: Arial; padding: 20px;">
               <h2 style="color: orange;">⚠️ Security Alert - High Vulnerability Count Detected</h2>
               <p><strong>Portfolio Website:</strong> ${{ github.repository }}</p>
-              <p><strong>Docker Image:</strong> ${{ needs.build-scan-push.outputs.image-name }}:${{ needs.build-scan-push.outputs.image-tag }}</p>
+              <p><strong>Docker Image:</strong> ${{ secrets.DOCKER_IMAGE }}:${{ needs.build-scan-push.outputs.image-tag }}</p>
               
               <p><strong>Vulnerability Summary:</strong></p>
               <ul>
@@ -583,6 +1123,7 @@ jobs:
                 <li>🔄 Update your base Docker image to the latest security patches</li>
                 <li>📦 Update any vulnerable packages identified in the scan</li>
                 <li>🛡️ Consider implementing stricter vulnerability thresholds</li>
+                <li>⚠️ Review before deploying the updated Helm chart</li>
               </ul>
               
               <p>📊 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Detailed Security Reports</a></p>
@@ -599,6 +1140,7 @@ jobs:
 # - DOCKER_IMAGE: Docker image name (e.g., username/repo-name)
 # - EMAIL_USERNAME: Gmail address for sending notifications
 # - EMAIL_PASSWORD: Gmail app password for SMTP authentication
+# - GITHUB_TOKEN: GitHub token for repository access (automatically provided)
 #
 # GitHub Variables (Settings > Secrets and variables > Actions > Variables):
 # - EMAIL_TO: Recipient email address for notifications
@@ -614,9 +1156,36 @@ jobs:
 # 5. Consider adding environment-specific deployments after security checks
 # 6. Review and update base Docker images regularly
 # 7. Test email notifications periodically to ensure delivery
+# 8. Monitor Helm chart updates and validate Kubernetes deployments
+# 9. Consider implementing GitOps workflows for automated deployments
 #
 # For troubleshooting:
 # - Check GitHub Actions logs for detailed error messages
 # - Verify all secrets and variables are properly configured
 # - Ensure Docker image repository exists and is accessible
 # - Confirm SonarCloud project is properly configured
+# - Verify chart/values.yaml file exists and has correct structure
+# - Check Git permissions for automated commits
+# - Validate Helm chart syntax after updates
+#
+# ===========================================
+# HELM CHART INTEGRATION DETAILS
+# ===========================================
+#
+# The pipeline now includes automated Helm chart updates:
+# 1. After successful Docker image build and security scans
+# 2. Updates the image tag in chart/values.yaml
+# 3. Commits changes with detailed commit message
+# 4. Creates deployment git tags for tracking
+# 5. Only runs on main branch pushes (not PRs)
+# 6. Includes security scan results in commit messages
+#
+# Chart Structure Expected:
+# - chart/values.yaml must exist
+# - Image tag should be in format: tag: "latest" or tag: "your-tag"
+# - The sed command will replace any tag value between quotes
+#
+# To customize for different chart structures:
+# - Modify the sed command in the update-helm-values step
+# - Adjust the VALUES_FILE path if your chart is in a different location
+# - Update git configuration if using different commit author details

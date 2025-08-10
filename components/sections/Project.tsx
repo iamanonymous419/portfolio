@@ -52,7 +52,7 @@ const Project: React.FunctionComponent = () => {
             <ProjectCard
               title="Marketverse"
               description="A feature-rich e-commerce platform built with Next.js that enables users to buy and sell products. Implements modern UI with ShadCN, secure authentication with Clerk, and responsive design."
-              link="https://marketverse-phi.vercel.app"
+              link="https://marketverse.iamanonymous.in"
               tags={['Next.js', 'E-commerce', 'ShadCN UI', 'Authentication']}
               icon={<ExternalLink className="h-4 w-4" />}
             />
