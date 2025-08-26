@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
-replicaCount: 3
+replicaCount: 5
 
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
@@ -41,13 +41,13 @@ podLabels: {}
 podSecurityContext: {}
   # fsGroup: 2000
 
-securityContext: {}
+securityContext: 
   # capabilities:
   #   drop:
   #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
@@ -59,16 +59,28 @@ service:
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
-  enabled: false
-  className: ''
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
+  enabled: true
+  className: 'alb'
+  annotations: 
+    alb.ingress.kubernetes.io/group.name: portfolio
+    alb.ingress.kubernetes.io/load-balancer-name: portfolio
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:813520051851:certificate/5a1b64e9-a075-47c3-87e9-1c7d4f6c6520
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}, {"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
   hosts:
-    - host: chart-example.local
+
+    - host: iamanonymous.in
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix
+
+    - host: www.iamanonymous.in
+      paths:
+        - path: /
+          pathType: Prefix
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -90,7 +102,7 @@ resources:
 readinessProbe:
   httpGet:
     path: /
-    port: http
+    port: 3000
   initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 5
@@ -99,17 +111,26 @@ readinessProbe:
 livenessProbe:
   httpGet:
     path: /
-    port: http
+    port: 3000
   initialDelaySeconds: 10
   periodSeconds: 15
   timeoutSeconds: 5
   failureThreshold: 5
 
+startupProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
   enabled: true
-  minReplicas: 3
-  maxReplicas: 50
+  minReplicas: 5
+  maxReplicas: 30
   targetCPUUtilizationPercentage: 80
   targetMemoryUtilizationPercentage: 80
 
