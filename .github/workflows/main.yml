@@ -1,5 +1,6 @@
-# DevSecOps CI Pipeline for Portfolio Website
-# ===========================================
+# =============================================================================
+# DEVSECOPS CI PIPELINE FOR PORTFOLIO WEBSITE
+# =============================================================================
 # This pipeline implements a comprehensive DevSecOps approach with:
 # - Static code analysis (SonarCloud)
 # - Dependency security scanning (OWASP, Bun Audit)
@@ -8,11 +9,11 @@
 # - Security report aggregation
 # - Helm chart image tag updates
 
----
 name: DevSecOps CI Pipeline - Portfolio Website
 
-# Pipeline Triggers
-# -----------------
+# =============================================================================
+# PIPELINE TRIGGERS
+# =============================================================================
 # Runs on pushes to main branch and pull requests
 # Excludes documentation and workflow changes to optimize CI time
 on:
@@ -23,6 +24,9 @@ on:
       - '*.md'
       - '.github/workflows/**'
       - 'docs/**'
+      - 'iac/**'
+      - 'argocd/**'
+      - 'charts/**'
   pull_request:
     branches: ['main']
     paths-ignore:
@@ -30,26 +34,30 @@ on:
       - '*.md'
       - '.github/workflows/**'
       - 'docs/**'
+      - 'iac/**'
+      - 'argocd/**'
+      - 'charts/**'
 
-# Security Permissions
-# --------------------
+# =============================================================================
+# SECURITY PERMISSIONS
+# =============================================================================
 # Minimal permissions following principle of least privilege
 permissions:
   contents: write # Changed from 'read' to 'write' to allow commits
   security-events: write # Upload security scan results to GitHub Security tab
 
 jobs:
-  ##################################
-  # 🔍 STATIC ANALYSIS & QUALITY GATE
-  ##################################
+  # ===========================================================================
+  # STATIC ANALYSIS & QUALITY GATE JOB
+  # ===========================================================================
   static-analysis:
     name: Static Code Analysis
     runs-on: ubuntu-latest
 
     steps:
-      ##################################
-      # 🔽 Checkout Code
-      ##################################
+      # =========================================================================
+      # CHECKOUT CODE STEP
+      # =========================================================================
       # Checkout with full history for SonarCloud analysis
       - id: checkout-code
         name: Checkout Code
@@ -57,9 +65,9 @@ jobs:
         with:
           fetch-depth: 0 # Full git history required for SonarCloud blame information
 
-      ##################################
-      # 🔧 Setup Build Environment
-      ##################################
+      # =========================================================================
+      # SETUP BUILD ENVIRONMENT
+      # =========================================================================
       # Install Bun runtime for package management
       - id: setup-bun
         name: Setup Bun
@@ -75,9 +83,9 @@ jobs:
       - name: Run test coverage
         run: bun run test:coverage
 
-      ##################################
-      # 📊 SonarCloud Scan
-      ##################################
+      # =========================================================================
+      # SONARCLOUD SCAN
+      # =========================================================================
       # SonarCloud code quality and security analysis
       - id: sonarcloud-scan
         name: SonarCloud Scan
@@ -107,25 +115,25 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  ##################################
-  # 🛡️ DEPENDENCY SECURITY ANALYSIS
-  ##################################
+  # ===========================================================================
+  # DEPENDENCY SECURITY ANALYSIS JOB
+  # ===========================================================================
   dependency-security:
     name: Dependency Security Scan
     runs-on: ubuntu-latest
 
     steps:
-      ##################################
-      # 🔽 Checkout Code
-      ##################################
+      # =========================================================================
+      # CHECKOUT CODE STEP
+      # =========================================================================
       # Checkout code for dependency analysis
       - id: checkout-code
         name: Checkout Code
         uses: actions/checkout@v4
 
-      ##################################
-      # 🔧 Setup Build Environment
-      ##################################
+      # =========================================================================
+      # SETUP BUILD ENVIRONMENT
+      # =========================================================================
       # Setup Bun runtime for package management
       - id: setup-bun
         name: Setup Bun
@@ -136,9 +144,9 @@ jobs:
         name: Install Dependencies
         run: bun install
 
-      ##################################
-      # 🗃️ Cache Management
-      ##################################
+      # =========================================================================
+      # CACHE MANAGEMENT
+      # =========================================================================
       # Cache OWASP vulnerability database to speed up subsequent runs
       - id: cache-owasp-db
         name: Cache OWASP DB
@@ -149,9 +157,9 @@ jobs:
           restore-keys: |
             owasp-db-${{ runner.os }}-
 
-      ##################################
-      # 🔍 Security Scanning
-      ##################################
+      # =========================================================================
+      # SECURITY SCANNING
+      # =========================================================================
       # OWASP Dependency Check - scans for known vulnerabilities in dependencies
       - id: run-owasp-dependency-check
         name: Run OWASP Dependency-Check
@@ -167,9 +175,9 @@ jobs:
         name: Run Bun Audit
         run: bun audit > bun-audit-report.txt || true # Continue on audit failures
 
-      ##################################
-      # 📤 Upload Reports
-      ##################################
+      # =========================================================================
+      # UPLOAD REPORTS
+      # =========================================================================
       # Upload security reports as artifacts for review
       - id: upload-dependency-reports
         name: Upload Dependency Reports
@@ -182,9 +190,9 @@ jobs:
             bun-audit-report.txt
           retention-days: 30 # Keep reports for 30 days
 
-  ##################################
-  # 🐳 BUILD, SCAN & PUSH CONTAINER
-  ##################################
+  # ===========================================================================
+  # BUILD, SCAN & PUSH CONTAINER JOB
+  # ===========================================================================
   build-scan-push:
     name: Build, Scan & Push Container
     runs-on: ubuntu-latest
@@ -198,9 +206,9 @@ jobs:
       high-vulns: ${{ steps.analyze-vulnerabilities.outputs.high-vulns }}
 
     steps:
-      ##################################
-      # 🔽 Checkout Code
-      ##################################
+      # =========================================================================
+      # CHECKOUT CODE STEP
+      # =========================================================================
       # Checkout code for Docker build
       - id: checkout-code
         name: Checkout Code
@@ -208,9 +216,9 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      ##################################
-      # 🏷️ Generate Tags
-      ##################################
+      # =========================================================================
+      # GENERATE TAGS
+      # =========================================================================
       # Generate unique tag for this build
       - id: generate-random-tag
         name: Generate Random Tag
@@ -219,9 +227,9 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "TAG=$TAG" >> $GITHUB_ENV
 
-      ##################################
-      # 🔧 Setup Docker Environment
-      ##################################
+      # =========================================================================
+      # SETUP DOCKER ENVIRONMENT
+      # =========================================================================
       # Setup Docker Buildx for multi-platform builds
       - id: setup-docker-buildx
         name: Set up Docker Buildx
@@ -235,9 +243,9 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      ##################################
-      # 🏗️ Build & Push Image
-      ##################################
+      # =========================================================================
+      # BUILD & PUSH IMAGE
+      # =========================================================================
       # Build and push multi-architecture Docker image
       - id: build-and-push-docker-image
         name: Build and Push Docker Image
@@ -260,9 +268,9 @@ jobs:
           echo "Verifying image exists..."
           docker pull ${{ secrets.DOCKER_IMAGE }}:${{ env.TAG }} || echo "Image pull failed, but continuing..."
 
-      ##################################
-      # 🔍 Security Scanning with Trivy
-      ##################################
+      # =========================================================================
+      # SECURITY SCANNING WITH TRIVY
+      # =========================================================================
 
       # Scan latest tag - Table format for human review (run first)
       - id: trivy-scan-latest-table
@@ -304,9 +312,9 @@ jobs:
           output: 'trivy-specific.sarif' # Keep original filename
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
-      ##################################
-      # 📊 Analyze Results
-      ##################################
+      # =========================================================================
+      # ANALYZE RESULTS
+      # =========================================================================
       # Analyze and count vulnerabilities
       - id: analyze-vulnerabilities
         name: Analyze Vulnerability Results
@@ -370,9 +378,9 @@ jobs:
             echo "SARIF file contains JSON: $(head -1 trivy-latest.sarif | grep -q '{' && echo 'Yes' || echo 'No')"
           fi
 
-      ##################################
-      # 📤 Upload Results
-      ##################################
+      # =========================================================================
+      # UPLOAD RESULTS
+      # =========================================================================
       # Upload SARIF results to GitHub Security tab
       - id: upload-sarif-to-github-security
         name: Upload SARIF to GitHub Security
@@ -395,9 +403,9 @@ jobs:
             trivy-specific-table.txt
           retention-days: 30
 
-  ##################################
-  # 📈 UPDATE HELM CHART VALUES
-  ##################################
+  # ===========================================================================
+  # UPDATE HELM CHART VALUES JOB
+  # ===========================================================================
   update-helm-chart:
     name: Update Helm Chart Image Tag
     runs-on: ubuntu-latest
@@ -407,9 +415,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      ##################################
-      # 🔽 Checkout Code
-      ##################################
+      # =========================================================================
+      # CHECKOUT CODE STEP
+      # =========================================================================
       # Checkout code with write permissions
       - id: checkout-code
         name: Checkout Code
@@ -418,9 +426,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      ##################################
-      # 🔧 Setup Git Configuration
-      ##################################
+      # =========================================================================
+      # SETUP GIT CONFIGURATION
+      # =========================================================================
       # Configure Git for automated commits
       - id: configure-git
         name: Configure Git
@@ -428,9 +436,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-      ##################################
-      # 📝 Update Helm Values File
-      ##################################
+      # =========================================================================
+      # UPDATE HELM VALUES FILE
+      # =========================================================================
       # Update the image tag in chart/values.yaml
       - id: update-helm-values
         name: Update Helm Chart Values
@@ -474,9 +482,9 @@ jobs:
             git diff "$VALUES_FILE"
           fi
 
-      ##################################
-      # 💾 Commit and Push Changes
-      ##################################
+      # =========================================================================
+      # COMMIT AND PUSH CHANGES
+      # =========================================================================
       # Commit the updated values file and push to repository
       - id: commit-and-push-changes
         name: Commit and Push Changes
@@ -507,9 +515,9 @@ jobs:
 
           echo "✅ Successfully committed and pushed chart updates"
 
-      ##################################
-      # 🏷️ Create Git Tag
-      ##################################
+      # =========================================================================
+      # CREATE GIT TAG
+      # =========================================================================
       # Create a git tag for this deployment
       - id: create-git-tag
         name: Create Git Tag
@@ -535,9 +543,9 @@ jobs:
 
           echo "✅ Created and pushed git tag: $GIT_TAG"
 
-  ##################################
-  # 📊 SECURITY REPORT AGGREGATION
-  ##################################
+  # ===========================================================================
+  # SECURITY REPORT AGGREGATION JOB
+  # ===========================================================================
   security-report:
     name: Security Report Summary
     runs-on: ubuntu-latest
@@ -547,17 +555,17 @@ jobs:
     if: always()
 
     steps:
-      ##################################
-      # 📥 Download Artifacts
-      ##################################
+      # =========================================================================
+      # DOWNLOAD ARTIFACTS
+      # =========================================================================
       # Download all artifacts from previous jobs
       - id: download-all-artifacts
         name: Download All Artifacts
         uses: actions/download-artifact@v4
 
-      ##################################
-      # 📋 Create Summary Report
-      ##################################
+      # =========================================================================
+      # CREATE SUMMARY REPORT
+      # =========================================================================
       # Create comprehensive security summary report
       - id: create-security-summary
         name: Create Security Summary
@@ -598,9 +606,9 @@ jobs:
           echo "3. Consider implementing vulnerability thresholds for future builds" >> security-summary.md
           echo "4. Deploy the updated Helm chart to your Kubernetes cluster" >> security-summary.md
 
-      ##################################
-      # 📤 Upload Summary
-      ##################################
+      # =========================================================================
+      # UPLOAD SUMMARY
+      # =========================================================================
       # Upload security summary as artifact
       - id: upload-security-summary
         name: Upload Security Summary
@@ -611,9 +619,9 @@ jobs:
           path: security-summary.md
           retention-days: 30
 
-  ##################################
-  # 📊 DEPLOYMENT SUMMARY
-  ##################################
+  # ===========================================================================
+  # DEPLOYMENT SUMMARY JOB
+  # ===========================================================================
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
@@ -623,9 +631,9 @@ jobs:
     if: always()
 
     steps:
-      ##################################
-      # 📋 Generate Deployment Summary
-      ##################################
+      # =========================================================================
+      # GENERATE DEPLOYMENT SUMMARY
+      # =========================================================================
       # Create comprehensive deployment summary for GitHub Actions UI
       - id: create-deployment-summary
         name: Create Deployment Summary
@@ -990,9 +998,9 @@ jobs:
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "*Pipeline summary generated at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
 
-  ##################################
-  # 📧 NOTIFICATION SYSTEM
-  ##################################
+  # ===========================================================================
+  # NOTIFICATION SYSTEM JOB
+  # ===========================================================================
   notification:
     name: Send Notifications
     runs-on: ubuntu-latest
@@ -1002,9 +1010,9 @@ jobs:
     if: always()
 
     steps:
-      ##################################
-      # ✅ Success Notifications
-      ##################################
+      # =========================================================================
+      # SUCCESS NOTIFICATIONS
+      # =========================================================================
       # Send success notification when all jobs pass
       - id: send-success-email
         name: Send Success Email
@@ -1051,9 +1059,9 @@ jobs:
               <p>📝 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Full Logs & Download Reports</a></p>
             </div>
 
-      ##################################
-      # ❌ Failure Notifications
-      ##################################
+      # =========================================================================
+      # FAILURE NOTIFICATIONS
+      # =========================================================================
       # Send failure notification when any job fails
       - id: send-failure-email
         name: Send Failure Email
@@ -1087,9 +1095,9 @@ jobs:
               <p>🛠️ <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs & Download Reports</a></p>
             </div>
 
-      ##################################
-      # ⚠️ Security Alerts
-      ##################################
+      # =========================================================================
+      # SECURITY ALERTS
+      # =========================================================================
       # Send security alert for high vulnerability counts
       - id: send-security-alert-email
         name: Send Security Alert Email
@@ -1129,9 +1137,9 @@ jobs:
               <p>📊 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Detailed Security Reports</a></p>
             </div>
 
-# ===========================================
+# =============================================================================
 # REQUIRED SECRETS AND VARIABLES
-# ===========================================
+# =============================================================================
 #
 # GitHub Secrets (Settings > Secrets and variables > Actions > Secrets):
 # - SONAR_TOKEN: SonarCloud authentication token
@@ -1145,9 +1153,9 @@ jobs:
 # GitHub Variables (Settings > Secrets and variables > Actions > Variables):
 # - EMAIL_TO: Recipient email address for notifications
 #
-# ===========================================
+# =============================================================================
 # MAINTENANCE NOTES
-# ===========================================
+# =============================================================================
 #
 # 1. Update action versions regularly for security patches
 # 2. Review vulnerability thresholds based on your security requirements
@@ -1168,9 +1176,9 @@ jobs:
 # - Check Git permissions for automated commits
 # - Validate Helm chart syntax after updates
 #
-# ===========================================
+# =============================================================================
 # HELM CHART INTEGRATION DETAILS
-# ===========================================
+# =============================================================================
 #
 # The pipeline now includes automated Helm chart updates:
 # 1. After successful Docker image build and security scans

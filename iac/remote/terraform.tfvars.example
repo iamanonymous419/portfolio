@@ -1,0 +1,4 @@
+remote_bucket_name = "remote-bucket-for-portfolio"
+remote_table_name  = "remote_table"
+region             = "ap-south-1"
+env                = "production"

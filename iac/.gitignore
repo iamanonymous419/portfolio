@@ -1,0 +1,64 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+terraform.tfplan
+terraform.tfplan.*
+
+# SSH Keys
+*.pem
+*.pub
+id_rsa*
+id_ed25519*
+
+# Ansible
+*.retry
+.vault_pass
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.backup
+*.bak
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tgz
+
+# AWS CLI
+.aws/
+
+# Kubernetes
+kubeconfig*
+*.kubeconfig
