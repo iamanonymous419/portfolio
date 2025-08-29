@@ -1,0 +1,322 @@
+# =============================================================================
+# TERRAFORM DESTROY WORKFLOW
+# =============================================================================
+# This workflow automates the complete destruction of AWS infrastructure
+# including EKS cluster, VPC, DNS records, and all associated resources.
+# Requires manual confirmation by typing 'destroy' to prevent accidental runs.
+# =============================================================================
+
+name: Destroy All Infrastructure
+
+# =============================================================================
+# WORKFLOW TRIGGERS
+# =============================================================================
+# Manual trigger only with confirmation input for safety
+# =============================================================================
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'destroy' to confirm"
+        required: true
+
+# =============================================================================
+# JOBS CONFIGURATION
+# =============================================================================
+jobs:
+  destroy:
+    name: Destroy Application Resources
+    runs-on: ubuntu-latest
+
+    # =============================================================================
+    # ENVIRONMENT VARIABLES
+    # =============================================================================
+    # AWS credentials and region configuration
+    # =============================================================================
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    # =============================================================================
+    # PIPELINE STEPS
+    # =============================================================================
+    steps:
+      # =============================================================================
+      # CODE CHECKOUT
+      # =============================================================================
+      - id: checkout-code
+        name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # =============================================================================
+      # TERRAFORM SETUP
+      # =============================================================================
+      - id: setup-terraform
+        name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      # =============================================================================
+      # TERRAFORM INITIALIZATION
+      # =============================================================================
+      - id: init-terraform
+        name: Initialize Terraform (Application Resources)
+        run: terraform init
+        working-directory: iac/main
+
+      # =============================================================================
+      # DNS RECORDS DESTRUCTION
+      # =============================================================================
+      # Destroys Route53 DNS records first to prevent routing issues
+      # =============================================================================
+      - id: destroy-dns
+        name: Destroy Domain Records (Route53)
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: |
+          terraform destroy -target=aws_route53_record.app_alias -auto-approve
+          terraform destroy -target=aws_route53_record.root_domain -auto-approve
+          terraform destroy -target=aws_route53_record.www_domain -auto-approve
+        working-directory: iac/main
+
+      # =============================================================================
+      # LOAD BALANCER DELETION
+      # =============================================================================
+      # Manually deletes ALB to prevent dependency conflicts
+      # =============================================================================
+      - id: delete-alb
+        name: Delete Load Balancer (portfolio)
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: |
+          LB_ARN=$(aws elbv2 describe-load-balancers \
+            --names portfolio \
+            --query "LoadBalancers[0].LoadBalancerArn" \
+            --output text || true)
+
+          if [ "$LB_ARN" != "None" ] && [ "$LB_ARN" != "" ]; then
+            echo "Found Load Balancer: $LB_ARN"
+            aws elbv2 delete-load-balancer --load-balancer-arn $LB_ARN
+            echo "Deleted Load Balancer: portfolio"
+          else
+            echo "No Load Balancer named 'portfolio' found"
+          fi
+
+      # =============================================================================
+      # KUBERNETES COMPONENTS DESTRUCTION
+      # =============================================================================
+      # Destroys ALB Controller, ArgoCD, Monitoring, and Metrics Server
+      # =============================================================================
+      - id: destroy-alb-argocd-monitoring
+        name: Destroy ALB Controller, ArgoCD, Monitoring, Metrics Server
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: |
+          terraform destroy \
+            -target=aws_iam_policy.alb_controller \
+            -target=aws_iam_role.alb_controller \
+            -target=aws_iam_role_policy_attachment.alb_controller_attach \
+            -target=kubernetes_service_account.alb_controller \
+            -target=helm_release.alb_controller \
+            -target=helm_release.argocd \
+            -target=helm_release.monitoring \
+            -target=helm_release.metrics_server \
+            -auto-approve
+        working-directory: iac/main
+
+      # =============================================================================
+      # SECURITY GROUP RULES DESTRUCTION
+      # =============================================================================
+      # Removes security group rules before destroying main resources
+      # =============================================================================
+      - id: destroy-sg-rules
+        name: Destroy Security Group Rules
+        run: |
+          terraform apply -destroy -auto-approve \
+            -target=aws_security_group_rule.health_checks_to_lb \
+            -target=aws_security_group_rule.internet_to_lb_http \
+            -target=aws_security_group_rule.internet_to_lb_https
+        working-directory: iac/main
+
+      # =============================================================================
+      # EKS CLUSTER DESTRUCTION
+      # =============================================================================
+      # Destroys the entire EKS cluster and associated resources
+      # =============================================================================
+      - id: destroy-eks
+        name: Destroy EKS Cluster
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: terraform destroy -target=module.eks -auto-approve
+        working-directory: iac/main
+
+      # =============================================================================
+      # ORPHANED SECURITY GROUPS CLEANUP
+      # =============================================================================
+      # Cleans up any remaining Kubernetes-created security groups
+      # =============================================================================
+      - id: delete-orphaned-sgs
+        name: Delete orphaned SGs
+        run: |
+          for sg in $(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=k8s-*" \
+            --query "SecurityGroups[*].GroupId" \
+            --output text); do
+              echo "Deleting $sg"
+              aws ec2 delete-security-group --group-id $sg || true
+          done
+
+      # =============================================================================
+      # VPC DESTRUCTION
+      # =============================================================================
+      # Destroys the VPC and all associated networking components
+      # =============================================================================
+      - id: destroy-vpc
+        name: Destroy VPC
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: terraform destroy -target=module.vpc -auto-approve
+        working-directory: iac/main
+
+      # =============================================================================
+      # FINAL CLEANUP
+      # =============================================================================
+      # Catches any remaining resources not destroyed in previous steps
+      # =============================================================================
+      - id: destroy-all
+        name: Final Destroy (Catch-All)
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: terraform destroy -auto-approve
+        working-directory: iac/main
+
+      # =============================================================================
+      # STATE VERIFICATION
+      # =============================================================================
+      # Verifies that Terraform state is clean after destruction
+      # =============================================================================
+      - id: state-check
+        name: Terraform State Check
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: |
+          echo "Checking Terraform state..."
+          terraform state list || true
+        working-directory: iac/main
+      
+      # =============================================================================
+      # PIPELINE SUMMARY GENERATION
+      # =============================================================================
+      # Generates detailed summary for GitHub Actions UI
+      # =============================================================================
+      - id: summary
+        name: 📊 Generate Destroy Pipeline Summary
+        if: always()  # ✅ ensures summary runs even if earlier steps fail
+        run: |
+          echo "## 🏗️ Terraform Destroy Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Basic Information
+          echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Pipeline Status Overview
+          echo "### 📊 Destroy Status Overview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗑️ Delete ALB (portfolio) | ${{ steps.delete-alb.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌐 Destroy DNS Records | ${{ steps.destroy-dns.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚙️ Destroy ALB Controller / ArgoCD / Monitoring | ${{ steps.destroy-alb-argocd-monitoring.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔐 Destroy Security Group Rules | ${{ steps.destroy-sg-rules.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ☸️ Destroy EKS Cluster | ${{ steps.destroy-eks.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌉 Destroy VPC | ${{ steps.destroy-vpc.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔥 Final Destroy (Catch-All) | ${{ steps.destroy-all.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📋 State Check | ${{ steps.state-check.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Overall Status
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ Overall Status: **INFRASTRUCTURE DESTROYED SUCCESSFULLY**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 All resources destroyed and Terraform state is clean." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Overall Status: **DESTROY FAILED / PARTIAL CLEANUP**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🚨 Some resources may still exist. Check Terraform state and AWS console for leftovers." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Report generated at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
+
+      # =============================================================================
+      # SLACK NOTIFICATIONS - SUCCESS
+      # =============================================================================
+      # Sends detailed success notification to Slack channel
+      # =============================================================================
+      - id: slack-success
+        name: Slack Notification - Success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            ✅ *Infrastructure Destroy Completed Successfully*
+            
+            🏗️ *Repository:* ${{ github.repository }}
+            👤 *Triggered by:* ${{ github.actor }}
+            🌿 *Branch:* ${{ github.ref_name }}
+            🔗 *Workflow:* [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            📋 *Pipeline Steps Completed:*
+            • 🌐 DNS Records Destroyed
+            • 🗑️ Load Balancer Deleted
+            • ⚙️ ALB Controller/ArgoCD/Monitoring Destroyed
+            • 🔐 Security Group Rules Destroyed
+            • ☸️ EKS Cluster Destroyed
+            • 🌉 VPC Destroyed
+            • 🔥 Final Cleanup Completed
+            
+            🗑️ All AWS resources have been destroyed and cleaned up.
+
+      # =============================================================================
+      # SLACK NOTIFICATIONS - FAILURE
+      # =============================================================================
+      # Sends detailed failure notification with step status to Slack channel
+      # =============================================================================
+      - id: slack-failure
+        name: Slack Notification - Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            ❌ *Infrastructure Destroy Failed*
+            
+            🏗️ *Repository:* ${{ github.repository }}
+            👤 *Triggered by:* ${{ github.actor }}
+            🌿 *Branch:* ${{ github.ref_name }}
+            🔗 *Workflow:* [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            📋 *Pipeline Status:*
+            • 🌐 DNS Records: ${{ steps.destroy-dns.outcome }}
+            • 🗑️ Load Balancer: ${{ steps.delete-alb.outcome }}
+            • ⚙️ ALB/ArgoCD/Monitoring: ${{ steps.destroy-alb-argocd-monitoring.outcome }}
+            • 🔐 Security Groups: ${{ steps.destroy-sg-rules.outcome }}
+            • ☸️ EKS Cluster: ${{ steps.destroy-eks.outcome }}
+            • 🌉 VPC: ${{ steps.destroy-vpc.outcome }}
+            • 🔥 Final Cleanup: ${{ steps.destroy-all.outcome }}
+            
+            🚨 Some resources may still exist. Check AWS console and Terraform state for cleanup.
+
+      # =============================================================================
+      # TESTING UTILITIES
+      # =============================================================================
+      # Uncomment this step to test failure notifications
+      # =============================================================================
+      # - id: test-failure
+      #   name: Test Failure (Remove after testing)
+      #   run: exit 1

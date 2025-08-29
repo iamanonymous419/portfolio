@@ -55,20 +55,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # =========================================================================
+      # =============================================================================
       # CHECKOUT CODE STEP
-      # =========================================================================
+      # =============================================================================
       # Checkout with full history for SonarCloud analysis
+      # =============================================================================
       - id: checkout-code
         name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Full git history required for SonarCloud blame information
 
-      # =========================================================================
+      # =============================================================================
       # SETUP BUILD ENVIRONMENT
-      # =========================================================================
+      # =============================================================================
       # Install Bun runtime for package management
+      # =============================================================================
       - id: setup-bun
         name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -83,10 +85,11 @@ jobs:
       - name: Run test coverage
         run: bun run test:coverage
 
-      # =========================================================================
+      # =============================================================================
       # SONARCLOUD SCAN
-      # =========================================================================
+      # =============================================================================
       # SonarCloud code quality and security analysis
+      # =============================================================================
       - id: sonarcloud-scan
         name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@master
@@ -123,18 +126,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # =========================================================================
+      # =============================================================================
       # CHECKOUT CODE STEP
-      # =========================================================================
+      # =============================================================================
       # Checkout code for dependency analysis
+      # =============================================================================
       - id: checkout-code
         name: Checkout Code
         uses: actions/checkout@v4
 
-      # =========================================================================
+      # =============================================================================
       # SETUP BUILD ENVIRONMENT
-      # =========================================================================
+      # =============================================================================
       # Setup Bun runtime for package management
+      # =============================================================================
       - id: setup-bun
         name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -144,10 +149,11 @@ jobs:
         name: Install Dependencies
         run: bun install
 
-      # =========================================================================
+      # =============================================================================
       # CACHE MANAGEMENT
-      # =========================================================================
+      # =============================================================================
       # Cache OWASP vulnerability database to speed up subsequent runs
+      # =============================================================================
       - id: cache-owasp-db
         name: Cache OWASP DB
         uses: actions/cache@v4
@@ -157,10 +163,11 @@ jobs:
           restore-keys: |
             owasp-db-${{ runner.os }}-
 
-      # =========================================================================
+      # =============================================================================
       # SECURITY SCANNING
-      # =========================================================================
+      # =============================================================================
       # OWASP Dependency Check - scans for known vulnerabilities in dependencies
+      # =============================================================================
       - id: run-owasp-dependency-check
         name: Run OWASP Dependency-Check
         uses: dependency-check/Dependency-Check_Action@main
@@ -175,10 +182,11 @@ jobs:
         name: Run Bun Audit
         run: bun audit > bun-audit-report.txt || true # Continue on audit failures
 
-      # =========================================================================
+      # =============================================================================
       # UPLOAD REPORTS
-      # =========================================================================
+      # =============================================================================
       # Upload security reports as artifacts for review
+      # =============================================================================
       - id: upload-dependency-reports
         name: Upload Dependency Reports
         uses: actions/upload-artifact@v4
@@ -312,10 +320,11 @@ jobs:
           output: 'trivy-specific.sarif' # Keep original filename
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
-      # =========================================================================
+      # =============================================================================
       # ANALYZE RESULTS
-      # =========================================================================
-      # Analyze and count vulnerabilities
+      # =============================================================================
+      # Analyze and count vulnerabilities from Trivy scan results
+      # =============================================================================
       - id: analyze-vulnerabilities
         name: Analyze Vulnerability Results
         run: |
@@ -378,10 +387,11 @@ jobs:
             echo "SARIF file contains JSON: $(head -1 trivy-latest.sarif | grep -q '{' && echo 'Yes' || echo 'No')"
           fi
 
-      # =========================================================================
+      # =============================================================================
       # UPLOAD RESULTS
-      # =========================================================================
-      # Upload SARIF results to GitHub Security tab
+      # =============================================================================
+      # Upload SARIF results to GitHub Security tab and container reports as artifacts
+      # =============================================================================
       - id: upload-sarif-to-github-security
         name: Upload SARIF to GitHub Security
         if: steps.trivy-scan-latest-sarif.outcome == 'success'
@@ -403,9 +413,9 @@ jobs:
             trivy-specific-table.txt
           retention-days: 30
 
-  # ===========================================================================
+  # =============================================================================
   # UPDATE HELM CHART VALUES JOB
-  # ===========================================================================
+  # =============================================================================
   update-helm-chart:
     name: Update Helm Chart Image Tag
     runs-on: ubuntu-latest
@@ -415,10 +425,11 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      # =========================================================================
+      # =============================================================================
       # CHECKOUT CODE STEP
-      # =========================================================================
-      # Checkout code with write permissions
+      # =============================================================================
+      # Checkout code with write permissions for automated commits
+      # =============================================================================
       - id: checkout-code
         name: Checkout Code
         uses: actions/checkout@v4
@@ -426,20 +437,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      # =========================================================================
+      # =============================================================================
       # SETUP GIT CONFIGURATION
-      # =========================================================================
-      # Configure Git for automated commits
+      # =============================================================================
+      # Configure Git for automated commits with GitHub Actions identity
+      # =============================================================================
       - id: configure-git
         name: Configure Git
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-      # =========================================================================
+      # =============================================================================
       # UPDATE HELM VALUES FILE
-      # =========================================================================
-      # Update the image tag in chart/values.yaml
+      # =============================================================================
+      # Update the image tag in chart/values.yaml with new Docker image tag
+      # =============================================================================
       - id: update-helm-values
         name: Update Helm Chart Values
         run: |
@@ -1010,10 +1023,12 @@ jobs:
     if: always()
 
     steps:
-      # =========================================================================
+      # =============================================================================
       # SUCCESS NOTIFICATIONS
-      # =========================================================================
-      # Send success notification when all jobs pass
+      # =============================================================================
+      # Send detailed success notification when all jobs pass
+      # Includes pipeline status, security summary, and deployment information
+      # =============================================================================
       - id: send-success-email
         name: Send Success Email
         if: needs.static-analysis.result == 'success' && needs.dependency-security.result == 'success' && needs.build-scan-push.result == 'success'
@@ -1059,10 +1074,12 @@ jobs:
               <p>📝 <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Full Logs & Download Reports</a></p>
             </div>
 
-      # =========================================================================
+      # =============================================================================
       # FAILURE NOTIFICATIONS
-      # =========================================================================
-      # Send failure notification when any job fails
+      # =============================================================================
+      # Send detailed failure notification when any job fails
+      # Includes failed job status and troubleshooting guidance
+      # =============================================================================
       - id: send-failure-email
         name: Send Failure Email
         if: needs.static-analysis.result == 'failure' || needs.dependency-security.result == 'failure' || needs.build-scan-push.result == 'failure'
@@ -1095,10 +1112,12 @@ jobs:
               <p>🛠️ <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Logs & Download Reports</a></p>
             </div>
 
-      # =========================================================================
+      # =============================================================================
       # SECURITY ALERTS
-      # =========================================================================
+      # =============================================================================
       # Send security alert for high vulnerability counts
+      # Triggers when critical vulnerabilities > 0 or high vulnerabilities > 5
+      # =============================================================================
       - id: send-security-alert-email
         name: Send Security Alert Email
         # Trigger alert if any critical vulnerabilities or more than 5 high vulnerabilities

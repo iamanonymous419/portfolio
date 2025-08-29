@@ -545,7 +545,7 @@ alertmanager:
     receivers:
     - name: 'slack-notification'
       slack_configs:
-          - api_url: 'https://hooks.slack.com/services/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'
+          - api_url:  <YOUR_SLACK_WEBHOOK_URL>
             channel: '#portfolio'
             send_resolved: true
     templates:

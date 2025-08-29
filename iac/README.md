@@ -167,8 +167,8 @@ aws eks update-kubeconfig --region ap-south-1 --name portfolio-cluster
 Deploy applications via ArgoCD:
 
 ```bash
-kubectl apply -f ../../argocd/application/app.yml
 kubectl apply -f ../../argocd/project/project.yml
+kubectl apply -f ../../argocd/application/app.yml
 ```
 
 ### Domain Verification and Ingress
