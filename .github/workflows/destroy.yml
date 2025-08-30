@@ -51,6 +51,17 @@ jobs:
         uses: actions/checkout@v4
 
       # =============================================================================
+      # KUBECTL CONFIGURATION
+      # =============================================================================
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name portfolio-cluster
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      # =============================================================================
       # TERRAFORM SETUP
       # =============================================================================
       - id: setup-terraform
@@ -113,6 +124,10 @@ jobs:
         if: ${{ github.event.inputs.confirm == 'destroy' }}
         run: |
           terraform destroy \
+            -target=aws_iam_policy.alb_controller \
+            -target=aws_iam_role.alb_controller \
+            -target=aws_iam_role_policy_attachment.alb_controller_attach \
+            -target=kubernetes_service_account.alb_controller \
             -target=helm_release.alb_controller \
             -target=helm_release.argocd \
             -target=helm_release.monitoring \
