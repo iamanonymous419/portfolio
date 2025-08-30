@@ -57,6 +57,11 @@ resource "kubernetes_service_account" "alb_controller" {
       "eks.amazonaws.com/role-arn" = aws_iam_role.alb_controller.arn
     }
   }
+  
+  depends_on = [
+    time_sleep.wait_for_cluster,
+    aws_iam_role.alb_controller
+  ]
 }
 
 # =============================================================================
