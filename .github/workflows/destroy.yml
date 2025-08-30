@@ -50,14 +50,7 @@ jobs:
         name: Checkout Repository
         uses: actions/checkout@v4
 
-      # =============================================================================
-      # KUBECTL CONFIGURATION
-      # =============================================================================
-      - name: Configure kubectl
-        run: |
-          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name portfolio-cluster
-
-
+     
                # =============================================================================
       # TERRAFORM SETUP
       # =============================================================================
@@ -75,21 +68,7 @@ jobs:
         run: terraform init
         working-directory: iac/main
 
-      - id: destroy-alb-argocd-monitoring
-        name: Destroy ALB Controller, ArgoCD, Monitoring, Metrics Server
-        if: ${{ github.event.inputs.confirm == 'destroy' }}
-        run: |
-          terraform destroy \
-            -target=aws_iam_policy.alb_controller \
-            -target=aws_iam_role.alb_controller \
-            -target=aws_iam_role_policy_attachment.alb_controller_attach \
-            -target=kubernetes_service_account.alb_controller \
-            -target=helm_release.alb_controller \
-            -target=helm_release.argocd \
-            -target=helm_release.monitoring \
-            -target=helm_release.metrics_server \
-            -auto-approve
-        working-directory: iac/main
+     
 
  
 
