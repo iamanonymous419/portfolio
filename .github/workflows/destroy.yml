@@ -57,7 +57,24 @@ jobs:
         run: |
           aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name portfolio-cluster
 
-          
+
+               # =============================================================================
+      # TERRAFORM SETUP
+      # =============================================================================
+      - id: setup-terraform
+        name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      # =============================================================================
+      # TERRAFORM INITIALIZATION
+      # =============================================================================
+      - id: init-terraform
+        name: Initialize Terraform (Application Resources)
+        run: terraform init
+        working-directory: iac/main
+
       - id: destroy-alb-argocd-monitoring
         name: Destroy ALB Controller, ArgoCD, Monitoring, Metrics Server
         if: ${{ github.event.inputs.confirm == 'destroy' }}
@@ -74,22 +91,7 @@ jobs:
             -auto-approve
         working-directory: iac/main
 
-      # =============================================================================
-      # TERRAFORM SETUP
-      # =============================================================================
-      - id: setup-terraform
-        name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: latest
-
-      # =============================================================================
-      # TERRAFORM INITIALIZATION
-      # =============================================================================
-      - id: init-terraform
-        name: Initialize Terraform (Application Resources)
-        run: terraform init
-        working-directory: iac/main
+ 
 
       # =============================================================================
       # DNS RECORDS DESTRUCTION
