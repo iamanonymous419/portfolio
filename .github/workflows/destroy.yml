@@ -199,7 +199,7 @@ jobs:
           echo "Checking Terraform state..."
           terraform state list || true
         working-directory: iac/main
-      
+
       # =============================================================================
       # PIPELINE SUMMARY GENERATION
       # =============================================================================
@@ -207,7 +207,7 @@ jobs:
       # =============================================================================
       - id: summary
         name: 📊 Generate Destroy Pipeline Summary
-        if: always()  # ✅ ensures summary runs even if earlier steps fail
+        if: always() # ✅ ensures summary runs even if earlier steps fail
         run: |
           echo "## 🏗️ Terraform Destroy Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -264,12 +264,12 @@ jobs:
           fields: repo,message,commit,author,action,eventName,ref,workflow
           text: |
             ✅ *Infrastructure Destroy Completed Successfully*
-            
+
             🏗️ *Repository:* ${{ github.repository }}
             👤 *Triggered by:* ${{ github.actor }}
             🌿 *Branch:* ${{ github.ref_name }}
             🔗 *Workflow:* [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            
+
             📋 *Pipeline Steps Completed:*
             • 🌐 DNS Records Destroyed
             • 🗑️ Load Balancer Deleted
@@ -278,7 +278,7 @@ jobs:
             • ☸️ EKS Cluster Destroyed
             • 🌉 VPC Destroyed
             • 🔥 Final Cleanup Completed
-            
+
             🗑️ All AWS resources have been destroyed and cleaned up.
 
       # =============================================================================
@@ -295,12 +295,12 @@ jobs:
           fields: repo,message,commit,author,action,eventName,ref,workflow
           text: |
             ❌ *Infrastructure Destroy Failed*
-            
+
             🏗️ *Repository:* ${{ github.repository }}
             👤 *Triggered by:* ${{ github.actor }}
             🌿 *Branch:* ${{ github.ref_name }}
             🔗 *Workflow:* [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            
+
             📋 *Pipeline Status:*
             • 🌐 DNS Records: ${{ steps.destroy-dns.outcome }}
             • 🗑️ Load Balancer: ${{ steps.delete-alb.outcome }}
@@ -309,7 +309,7 @@ jobs:
             • ☸️ EKS Cluster: ${{ steps.destroy-eks.outcome }}
             • 🌉 VPC: ${{ steps.destroy-vpc.outcome }}
             • 🔥 Final Cleanup: ${{ steps.destroy-all.outcome }}
-            
+
             🚨 Some resources may still exist. Check AWS console and Terraform state for cleanup.
 
       # =============================================================================

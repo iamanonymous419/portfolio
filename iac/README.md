@@ -12,6 +12,7 @@ This repository contains Terraform configurations for deploying a complete portf
 ## Architecture Overview
 
 The infrastructure includes:
+
 - **VPC**: Custom VPC with public/private subnets
 - **EKS Cluster**: Managed Kubernetes cluster
 - **Security Groups**: Network security configurations
@@ -76,6 +77,7 @@ terraform apply -target=module.vpc -target=module.eks
 ```
 
 Verify the state:
+
 ```bash
 terraform state list
 ```
@@ -129,7 +131,7 @@ terraform apply -target=aws_route53_record.app_alias -auto-approve
 terraform apply -target=aws_route53_record.root_domain -auto-approve
 terraform apply -target=aws_route53_record.www_domain -auto-approve
 
-# Note: Additional subdomains (argocd, grafana, prometheus, alertmanager) 
+# Note: Additional subdomains (argocd, grafana, prometheus, alertmanager)
 # should be configured in your domain.tf or through ingress annotations
 ```
 
@@ -206,10 +208,12 @@ kubectl describe certificate -n monitoring
 After deployment, you can access the following services:
 
 ### Main Application
+
 - **Portfolio Website**: https://iamanonymous.in
 - **Portfolio Website (www)**: https://www.iamanonymous.in
 
 ### DevOps & Monitoring Tools
+
 - **ArgoCD**: https://argocd.iamanonymous.in
   - Username: `admin`
   - Password: Get from `terraform output -raw argocd_admin_password`
@@ -232,7 +236,7 @@ After deployment, retrieve the admin passwords:
 # Get ArgoCD admin password
 terraform output -raw argocd_admin_password
 
-# Get Grafana admin password  
+# Get Grafana admin password
 terraform output -raw grafana_admin_password
 ```
 
@@ -300,6 +304,7 @@ terraform destroy
 ### Common Commands
 
 Update kubeconfig:
+
 ```bash
 aws eks update-kubeconfig --region ap-south-1 --name portfolio-cluster
 ```
@@ -307,11 +312,13 @@ aws eks update-kubeconfig --region ap-south-1 --name portfolio-cluster
 ### Helm Management
 
 List all Helm releases:
+
 ```bash
 helm list -A
 ```
 
 Uninstall Helm releases:
+
 ```bash
 helm uninstall argocd -n argocd
 helm uninstall monitoring -n monitoring
@@ -373,6 +380,7 @@ kubectl get challenges -A
 ### Kubernetes Debugging
 
 Check all resources across namespaces:
+
 ```bash
 kubectl get all -A
 kubectl get pods -A
@@ -380,6 +388,7 @@ kubectl get ingress -A
 ```
 
 Check specific namespace resources:
+
 ```bash
 kubectl get all -n monitoring
 kubectl get ingress -n monitoring
@@ -388,6 +397,7 @@ kubectl get ingress -n monitoring
 ### Service Account Issues
 
 If you encounter service account issues:
+
 ```bash
 kubectl delete serviceaccount aws-load-balancer-controller -n kube-system
 ```
@@ -395,11 +405,13 @@ kubectl delete serviceaccount aws-load-balancer-controller -n kube-system
 ### Terraform State Management
 
 Refresh Terraform state:
+
 ```bash
 terraform refresh
 ```
 
 View Terraform output in JSON format:
+
 ```bash
 terraform output -json
 ```
@@ -408,7 +420,7 @@ terraform output -json
 
 1. **Region**: This configuration is set for `ap-south-1`. Update the region in terraform files if deploying elsewhere.
 
-2. **Domain Configuration**: 
+2. **Domain Configuration**:
    - Main domain: `iamanonymous.in`
    - Subdomains configured: `argocd`, `grafana`, `prometheus`, `alertmanager`, `www`
    - Ensure all subdomains are properly configured in your Route53 hosted zone
@@ -430,6 +442,7 @@ terraform output -json
 ## Support
 
 For issues or questions:
+
 1. Check the troubleshooting section above
 2. Review Terraform and AWS documentation
 3. Check CloudWatch logs for detailed error messages
