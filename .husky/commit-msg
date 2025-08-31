@@ -1,0 +1,68 @@
+# =============================================================================
+# COMMIT MESSAGE VALIDATION
+# =============================================================================
+
+commit_regex='^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,50}'
+
+if ! grep -qE "$commit_regex" "$1"; then
+  echo ""
+  echo "# ============================================================================="
+  echo "# ❌ INVALID COMMIT MESSAGE FORMAT"
+  echo "# ============================================================================="
+  echo ""
+  echo "# Commit message must follow the format: type(scope): description"
+  echo ""
+  echo "# ============================================================================="
+  echo "# VALID COMMIT TYPES"
+  echo "# ============================================================================="
+  echo "# feat: A new feature"
+  echo "# fix: A bug fix"
+  echo "# docs: Documentation only changes"
+  echo "# style: Changes that do not affect the meaning of the code"
+  echo "# refactor: A code change that neither fixes a bug nor adds a feature"
+  echo "# test: Adding missing tests or correcting existing tests"
+  echo "# chore: Changes to the build process or auxiliary tools"
+  echo "# perf: A code change that improves performance"
+  echo "# ci: Changes to CI configuration files and scripts"
+  echo "# build: Changes that affect the build system or external dependencies"
+  echo "# revert: Reverts a previous commit"
+  echo ""
+  echo "# ============================================================================="
+  echo "# EXAMPLES"
+  echo "# ============================================================================="
+  echo "# feat(auth): add JWT token validation"
+  echo "# fix: resolve memory leak in data processing"
+  echo "# docs: update API documentation"
+  echo "# chore(deps): update terraform provider versions"
+  echo ""
+  echo "# Your commit message: $(cat $1)"
+  echo ""
+  exit 1
+fi
+
+echo "# ============================================================================="
+echo "# ✅ COMMIT MESSAGE VALIDATION PASSED"
+echo "# ============================================================================="
+
+# =============================================================================
+# COMMITLINT VALIDATION
+# =============================================================================
+echo "# Running commitlint validation..."
+
+if ! bunx commitlint --edit "$1"; then
+  echo ""
+  echo "# ============================================================================="
+  echo "# ❌ COMMITLINT VALIDATION FAILED"
+  echo "# ============================================================================="
+  echo ""
+  exit 1
+fi
+
+echo "# ============================================================================="
+echo "# ✅ COMMITLINT VALIDATION PASSED"
+echo "# ============================================================================="
+
+echo ""
+echo "# ============================================================================="
+echo "# ✅ ALL COMMIT CHECKS PASSED"
+echo "# ============================================================================="
