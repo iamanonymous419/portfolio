@@ -31,7 +31,7 @@ WORKDIR /home/portfolio
 COPY package.json bun.lock ./
 
 # Install only production dependencies
-RUN bun install --production
+RUN bun install --production --ignore-scripts
 
 
 # ----------------------------
