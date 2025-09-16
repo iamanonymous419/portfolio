@@ -98,6 +98,8 @@ export const SkillsSection: React.FunctionComponent = () => {
       { name: 'Nginx', level: 70, icon: '🌐' },
       { name: 'Jest', level: 30, icon: '🧪' },
       { name: 'Slack', level: 70, icon: '💬' },
+      { name: 'Hostinger', level: 60, icon: '🌍' },
+      { name: 'Stream', level: 50, icon: '🎥' },
     ],
   };
 

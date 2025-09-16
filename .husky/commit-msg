@@ -49,7 +49,7 @@ echo "# ========================================================================
 # =============================================================================
 echo "# Running commitlint validation..."
 
-if ! bunx commitlint --edit "$1"; then
+if ! bun run commitlint --edit "$1"; then
   echo ""
   echo "# ============================================================================="
   echo "# ❌ COMMITLINT VALIDATION FAILED"

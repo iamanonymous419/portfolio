@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import Project from '@/components/sections/Project';
 
@@ -69,6 +69,7 @@ jest.mock('lucide-react', () => ({
   LinkIcon: () => <div data-testid="link-icon">LinkIcon</div>,
   Package: () => <div data-testid="package-icon">Package</div>,
   User: () => <div data-testid="user-icon">User</div>,
+  PlayCircle: () => <div data-testid="play-circle-icon">PlayCircle</div>,
 }));
 
 describe('Project Component', () => {
@@ -160,7 +161,7 @@ describe('Project Component', () => {
     it('wraps each project in StaggerItem', () => {
       render(<Project />);
       const staggerItems = screen.getAllByTestId('stagger-item');
-      expect(staggerItems).toHaveLength(7); // 7 projects
+      expect(staggerItems).toHaveLength(8); // 8 projects
     });
   });
 
@@ -168,7 +169,7 @@ describe('Project Component', () => {
     it('renders all project cards', () => {
       render(<Project />);
       const projectCards = screen.getAllByTestId('project-card');
-      expect(projectCards).toHaveLength(7);
+      expect(projectCards).toHaveLength(8);
     });
 
     it('renders Portfolio project with correct data', () => {
@@ -219,6 +220,25 @@ describe('Project Component', () => {
         screen.getByText(/DevOps infrastructure for the Marketverse project/)
       ).toBeInTheDocument();
       expect(screen.getByTestId('github-icon')).toBeInTheDocument();
+    });
+
+    it('renders Streamify project with correct data', () => {
+      render(<Project />);
+      expect(screen.getByText('Streamify')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /A comprehensive 3-tier streaming application originally from Codesistency/
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('play-circle-icon')).toBeInTheDocument();
+
+      const streamifyCard = screen
+        .getByText('Streamify')
+        .closest('[data-testid="project-card"]');
+      expect(streamifyCard).toHaveAttribute(
+        'data-link',
+        'https://github.com/iamanonymous419/streamify'
+      );
     });
 
     it('renders CircleCI DevOps Orbs project with correct data', () => {
@@ -364,8 +384,8 @@ describe('Project Component', () => {
       const projectTitles = screen.getAllByTestId('project-title');
       const projectDescriptions = screen.getAllByTestId('project-description');
 
-      expect(projectTitles).toHaveLength(7);
-      expect(projectDescriptions).toHaveLength(7);
+      expect(projectTitles).toHaveLength(8);
+      expect(projectDescriptions).toHaveLength(8);
 
       projectTitles.forEach(title => {
         expect(title).toHaveTextContent(/\w+/);
@@ -383,8 +403,7 @@ describe('Project Component', () => {
 
       // Component should render the same content on re-render
       rerender(<Project />);
-
-      expect(screen.getAllByTestId('project-card')).toHaveLength(7);
+      expect(screen.getAllByTestId('project-card')).toHaveLength(8);
       expect(screen.getByText('👨‍💻 Featured Creations')).toBeInTheDocument();
     });
   });
@@ -427,7 +446,7 @@ describe('Project Component', () => {
 
       // Check StaggerItem integration
       const staggerItems = screen.getAllByTestId('stagger-item');
-      expect(staggerItems).toHaveLength(7);
+      expect(staggerItems).toHaveLength(8);
     });
   });
 });

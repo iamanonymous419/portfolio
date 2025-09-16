@@ -8,6 +8,7 @@ import {
   Github,
   LinkIcon,
   Package,
+  PlayCircle,
   User,
 } from 'lucide-react';
 
@@ -64,6 +65,21 @@ const Project: React.FunctionComponent = () => {
               link="https://github.com/iamanonymous419/marketverse-gitops"
               tags={['ArgoCD', 'Jenkins', 'Terraform', 'Ansible', 'Trivy']}
               icon={<Github className="h-4 w-4" />}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <ProjectCard
+              title="Streamify"
+              description="A comprehensive 3-tier streaming application originally from Codesistency, enhanced with enterprise-grade Kubernetes deployment and DevOps automation. Features complete MERN stack architecture deployed from Minikube to AWS EKS."
+              link="https://github.com/iamanonymous419/streamify"
+              tags={[
+                'React',
+                'Express.js',
+                'MongoDB',
+                'Kubernetes',
+                'CircleCI',
+              ]}
+              icon={<PlayCircle className="h-4 w-4" />}
             />
           </StaggerItem>
           <StaggerItem>
