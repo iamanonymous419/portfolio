@@ -1,0 +1,384 @@
+# =============================================================================
+# TERRAFORM APPLY WORKFLOW
+# =============================================================================
+# This workflow automates the complete deployment of AWS infrastructure
+# including EKS cluster, VPC, DNS records, and Kubernetes applications.
+# Requires manual confirmation by typing 'apply' to prevent accidental runs.
+# =============================================================================
+
+name: Deploy All Infrastructure
+
+# =============================================================================
+# WORKFLOW TRIGGERS
+# =============================================================================
+# Manual trigger only with confirmation input for safety
+# =============================================================================
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type 'apply' to confirm"
+        required: true
+
+# =============================================================================
+# JOBS CONFIGURATION
+# =============================================================================
+jobs:
+  deploy:
+    name: Deploy Application Resources
+    runs-on: ubuntu-latest
+
+    # =============================================================================
+    # ENVIRONMENT VARIABLES
+    # =============================================================================
+    # AWS credentials and region configuration
+    # =============================================================================
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    # =============================================================================
+    # PIPELINE OUTPUTS
+    # =============================================================================
+    # Expose passwords as job outputs for Slack notification
+    # =============================================================================
+    outputs:
+      argocd_password: ${{ steps.get-passwords.outputs.argocd_password }}
+      grafana_password: ${{ steps.get-passwords.outputs.grafana_password }}
+
+    # =============================================================================
+    # PIPELINE STEPS
+    # =============================================================================
+    steps:
+      # =============================================================================
+      # CODE CHECKOUT
+      # =============================================================================
+      - id: checkout-code
+        name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # =============================================================================
+      # TERRAFORM SETUP
+      # =============================================================================
+      - id: setup-terraform
+        name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      # =============================================================================
+      # AWS CLI SETUP
+      # =============================================================================
+      - id: setup-aws-cli
+        name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # =============================================================================
+      # KUBECTL SETUP
+      # =============================================================================
+      - id: setup-kubectl
+        name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      # =============================================================================
+      # TERRAFORM INITIALIZATION
+      # =============================================================================
+      - id: init-terraform
+        name: Initialize Terraform (Application Resources)
+        run: terraform init
+        working-directory: iac/main
+
+      # =============================================================================
+      # TERRAFORM PLAN
+      # =============================================================================
+      - id: plan-terraform
+        name: Terraform Plan
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          terraform plan -out=tfplan
+          echo "## 📋 Terraform Plan Summary" >> plan_summary.txt
+          terraform show -no-color tfplan >> plan_summary.txt
+        working-directory: iac/main
+
+      # =============================================================================
+      # TERRAFORM APPLY
+      # =============================================================================
+      - id: apply-terraform
+        name: Apply Terraform Infrastructure
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: terraform apply tfplan
+        working-directory: iac/main
+
+      # =============================================================================
+      # KUBECONFIG UPDATE
+      # =============================================================================
+      - id: update-kubeconfig
+        name: Update Kubeconfig for EKS Cluster
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          CLUSTER_NAME=portfolio-cluster
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name $CLUSTER_NAME
+          kubectl get nodes
+        working-directory: iac/main
+
+      # =============================================================================
+      # WAIT FOR CLUSTER READINESS
+      # =============================================================================
+      - id: wait-for-cluster
+        name: Wait for EKS Cluster and Pods to be Ready
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          echo "Waiting for cluster to be fully ready..."
+          kubectl wait --for=condition=Ready nodes --all --timeout=300s
+          
+          echo "Waiting for system pods to be ready..."
+          kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=600s
+          
+          echo "Waiting for ArgoCD to be ready..."
+          kubectl wait --for=condition=Ready pods --all -n argocd --timeout=600s
+          
+          echo "Waiting for monitoring stack to be ready..."
+          kubectl wait --for=condition=Ready pods --all -n monitoring --timeout=600s
+
+      # =============================================================================
+      # ARGOCD PROJECT APPLICATION
+      # =============================================================================
+      - id: apply-argocd-project
+        name: Apply ArgoCD Project Configuration
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          echo "Applying ArgoCD Project configuration..."
+          kubectl apply -f ../../argocd/project/project.yml
+          kubectl get appprojects -n argocd
+        working-directory: iac/main
+
+      # =============================================================================
+      # ARGOCD APPLICATION DEPLOYMENT
+      # =============================================================================
+      - id: apply-argocd-application
+        name: Apply ArgoCD Application Configuration
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          echo "Applying ArgoCD Application configuration..."
+          kubectl apply -f ../../argocd/application/app.yml
+          kubectl get applications -n argocd
+        working-directory: iac/main
+
+      # =============================================================================
+      # WAIT FOR APPLICATIONS
+      # =============================================================================
+      - id: wait-for-applications
+        name: Wait for ArgoCD Applications to Sync
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          echo "Waiting for ArgoCD applications to sync..."
+          sleep 60  # Give ArgoCD time to detect and start syncing
+          
+          # Check application status
+          kubectl get applications -n argocd
+          
+          echo "Applications deployed successfully!"
+
+      # =============================================================================
+      # RETRIEVE PASSWORDS
+      # =============================================================================
+      - id: get-passwords
+        name: Retrieve ArgoCD and Grafana Passwords
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          echo "Retrieving application passwords..."
+          
+          ARGOCD_PASSWORD=$(terraform output -raw argocd_admin_password)
+          GRAFANA_PASSWORD=$(terraform output -raw grafana_admin_password)
+          
+          # Set as outputs for Slack notification
+          echo "argocd_password=$ARGOCD_PASSWORD" >> $GITHUB_OUTPUT
+          echo "grafana_password=$GRAFANA_PASSWORD" >> $GITHUB_OUTPUT
+          
+          echo "Passwords retrieved successfully"
+        working-directory: iac/main
+
+      # =============================================================================
+      # INFRASTRUCTURE VERIFICATION
+      # =============================================================================
+      - id: verify-infrastructure
+        name: Verify Infrastructure and Services
+        if: ${{ github.event.inputs.confirm == 'apply' }}
+        run: |
+          echo "## 🔍 Infrastructure Verification Report" > verification_report.txt
+          echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> verification_report.txt
+          echo "" >> verification_report.txt
+          
+          # EKS Cluster Status
+          echo "### ☸️ EKS Cluster Status" >> verification_report.txt
+          echo "**Cluster Name:** portfolio-cluster" >> verification_report.txt
+          echo "**Node Status:**" >> verification_report.txt
+          kubectl get nodes >> verification_report.txt
+          echo "" >> verification_report.txt
+          
+          # Applications Status
+          echo "### 🚀 Application Status" >> verification_report.txt
+          echo "**ArgoCD Applications:**" >> verification_report.txt
+          kubectl get applications -n argocd >> verification_report.txt
+          echo "" >> verification_report.txt
+          
+          # Service Status
+          echo "### 🌐 Service Endpoints" >> verification_report.txt
+          DOMAIN_NAME=iamanonymous.in
+          echo "**Primary Domain:** https://$DOMAIN_NAME" >> verification_report.txt
+          echo "**ArgoCD:** https://argocd.$DOMAIN_NAME" >> verification_report.txt
+          echo "**Grafana:** https://grafana.$DOMAIN_NAME" >> verification_report.txt
+          echo "**Prometheus:** https://prometheus.$DOMAIN_NAME" >> verification_report.txt
+          echo "**Alertmanager:** https://alertmanager.$DOMAIN_NAME" >> verification_report.txt
+          echo "" >> verification_report.txt
+          
+          # Resource Summary
+          echo "### 📊 Resource Summary" >> verification_report.txt
+          echo "**Pods by Namespace:**" >> verification_report.txt
+          kubectl get pods --all-namespaces >> verification_report.txt
+          
+          # Display report
+          cat verification_report.txt
+        working-directory: iac/main
+
+      # =============================================================================
+      # PIPELINE SUMMARY GENERATION
+      # =============================================================================
+      - id: summary
+        name: 📊 Generate Deploy Pipeline Summary
+        if: always()
+        run: |
+          echo "## 🚀 Terraform Deploy Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Basic Information
+          echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Pipeline Status Overview
+          echo "### 📊 Deploy Status Overview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏗️ Terraform Plan | ${{ steps.plan-terraform.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚀 Terraform Apply | ${{ steps.apply-terraform.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚙️ Update Kubeconfig | ${{ steps.update-kubeconfig.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏳ Wait for Cluster | ${{ steps.wait-for-cluster.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📋 Apply ArgoCD Project | ${{ steps.apply-argocd-project.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🎯 Apply ArgoCD Application | ${{ steps.apply-argocd-application.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⌛ Wait for Applications | ${{ steps.wait-for-applications.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔑 Retrieve Passwords | ${{ steps.get-passwords.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Verify Infrastructure | ${{ steps.verify-infrastructure.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Overall Status
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "### ✅ Overall Status: **INFRASTRUCTURE DEPLOYED SUCCESSFULLY**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 All infrastructure and applications deployed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Overall Status: **DEPLOYMENT FAILED**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "🚨 Some components failed to deploy. Check logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Report generated at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
+
+      # =============================================================================
+      # SLACK NOTIFICATIONS - SUCCESS
+      # =============================================================================
+      - id: slack-success
+        name: Slack Notification - Success with Passwords
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            ✅ *Infrastructure Deployment Completed Successfully*
+
+            🏗️ *Repository:* ${{ github.repository }}
+            👤 *Triggered by:* ${{ github.actor }}
+            🌿 *Branch:* ${{ github.ref_name }}
+            🔗 *Workflow:* [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            📋 *Pipeline Steps Completed:*
+            • 🚀 Terraform Infrastructure Applied
+            • ☸️ EKS Cluster Configured
+            • 📋 ArgoCD Project Applied
+            • 🎯 ArgoCD Applications Deployed
+            • ✅ Infrastructure Verified
+
+            🔑 *Application Access Credentials:*
+            
+            **ArgoCD Admin Password:**
+            ```
+            ${{ steps.get-passwords.outputs.argocd_password }}
+            ```
+            
+            **Grafana Admin Password:**
+            ```
+            ${{ steps.get-passwords.outputs.grafana_password }}
+            ```
+
+            🌐 *Service URLs:*
+            • ArgoCD: https://argocd.iamanonymous.in
+            • Grafana: https://grafana.iamanonymous.in
+            • Prometheus: https://prometheus.iamanonymous.in
+            • Main App: https://iamanonymous.in
+
+            🎉 Your infrastructure is ready to use!
+
+      # =============================================================================
+      # SLACK NOTIFICATIONS - FAILURE
+      # =============================================================================
+      - id: slack-failure
+        name: Slack Notification - Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            ❌ *Infrastructure Deployment Failed*
+
+            🏗️ *Repository:* ${{ github.repository }}
+            👤 *Triggered by:* ${{ github.actor }}
+            🌿 *Branch:* ${{ github.ref_name }}
+            🔗 *Workflow:* [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            📋 *Pipeline Status:*
+            • 🏗️ Terraform Plan: ${{ steps.plan-terraform.outcome }}
+            • 🚀 Terraform Apply: ${{ steps.apply-terraform.outcome }}
+            • ⚙️ Kubeconfig Update: ${{ steps.update-kubeconfig.outcome }}
+            • ⏳ Cluster Ready: ${{ steps.wait-for-cluster.outcome }}
+            • 📋 ArgoCD Project: ${{ steps.apply-argocd-project.outcome }}
+            • 🎯 ArgoCD Application: ${{ steps.apply-argocd-application.outcome }}
+            • ⌛ Applications Ready: ${{ steps.wait-for-applications.outcome }}
+            • 🔑 Password Retrieval: ${{ steps.get-passwords.outcomes }}
+            • ✅ Infrastructure Verification: ${{ steps.verify-infrastructure.outcome }}
+
+            🚨 Check the workflow logs for detailed error information.
+
+      # =============================================================================
+      # TESTING UTILITIES
+      # =============================================================================
+      # Uncomment this step to test failure notifications
+      # =============================================================================
+      # - id: test-failure
+      #   name: Test Failure (Remove after testing)
+      #   run: exit 1
