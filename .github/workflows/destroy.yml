@@ -104,6 +104,21 @@ jobs:
           fi
 
       # =============================================================================
+      # TERRAFORM STATE CLEANUP
+      # =============================================================================
+      # Removes problematic Kubernetes resources from Terraform state
+      # =============================================================================
+      - id: remove-problematic-resources
+        name: Remove Problematic Resources from Terraform State
+        if: ${{ github.event.inputs.confirm == 'destroy' }}
+        run: |
+          echo "Removing problematic Kubernetes resources from Terraform state..."
+          terraform state rm kubernetes_service_account.alb_controller || true
+          terraform state rm helm_release.alb_controller || true
+          echo "State cleanup completed"
+        working-directory: iac/main
+
+      # =============================================================================
       # KUBERNETES COMPONENTS DESTRUCTION
       # =============================================================================
       # Destroys ALB Controller, ArgoCD, Monitoring, and Metrics Server
@@ -116,8 +131,6 @@ jobs:
             -target=aws_iam_policy.alb_controller \
             -target=aws_iam_role.alb_controller \
             -target=aws_iam_role_policy_attachment.alb_controller_attach \
-            -target=kubernetes_service_account.alb_controller \
-            -target=helm_release.alb_controller \
             -target=helm_release.argocd \
             -target=helm_release.monitoring \
             -target=helm_release.metrics_server \
@@ -225,11 +238,13 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🗑️ Delete ALB (portfolio) | ${{ steps.delete-alb.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🌐 Destroy DNS Records | ${{ steps.destroy-dns.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗑️ Delete ALB (portfolio) | ${{ steps.delete-alb.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧹 Remove Problematic Resources from State | ${{ steps.remove-problematic-resources.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ⚙️ Destroy ALB Controller / ArgoCD / Monitoring | ${{ steps.destroy-alb-argocd-monitoring.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔐 Destroy Security Group Rules | ${{ steps.destroy-sg-rules.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| ☸️ Destroy EKS Cluster | ${{ steps.destroy-eks.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 Delete Orphaned Security Groups | ${{ steps.delete-orphaned-sgs.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🌉 Destroy VPC | ${{ steps.destroy-vpc.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔥 Final Destroy (Catch-All) | ${{ steps.destroy-all.outcome }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 📋 State Check | ${{ steps.state-check.outcome }} |" >> $GITHUB_STEP_SUMMARY
@@ -273,6 +288,7 @@ jobs:
             📋 *Pipeline Steps Completed:*
             • 🌐 DNS Records Destroyed
             • 🗑️ Load Balancer Deleted
+            • 🧹 Terraform State Cleaned
             • ⚙️ ALB Controller/ArgoCD/Monitoring Destroyed
             • 🔐 Security Group Rules Destroyed
             • ☸️ EKS Cluster Destroyed
@@ -304,6 +320,7 @@ jobs:
             📋 *Pipeline Status:*
             • 🌐 DNS Records: ${{ steps.destroy-dns.outcome }}
             • 🗑️ Load Balancer: ${{ steps.delete-alb.outcome }}
+            • 🧹 State Cleanup: ${{ steps.remove-problematic-resources.outcome }}
             • ⚙️ ALB/ArgoCD/Monitoring: ${{ steps.destroy-alb-argocd-monitoring.outcome }}
             • 🔐 Security Groups: ${{ steps.destroy-sg-rules.outcome }}
             • ☸️ EKS Cluster: ${{ steps.destroy-eks.outcome }}
