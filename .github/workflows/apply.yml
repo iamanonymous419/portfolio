@@ -138,13 +138,13 @@ jobs:
         run: |
           echo "Waiting for cluster to be fully ready..."
           kubectl wait --for=condition=Ready nodes --all --timeout=300s
-          
+
           echo "Waiting for system pods to be ready..."
           kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=600s
-          
+
           echo "Waiting for ArgoCD to be ready..."
           kubectl wait --for=condition=Ready pods --all -n argocd --timeout=600s
-          
+
           echo "Waiting for monitoring stack to be ready..."
           kubectl wait --for=condition=Ready pods --all -n monitoring --timeout=600s
 
@@ -181,10 +181,10 @@ jobs:
         run: |
           echo "Waiting for ArgoCD applications to sync..."
           sleep 60  # Give ArgoCD time to detect and start syncing
-          
+
           # Check application status
           kubectl get applications -n argocd
-          
+
           echo "Applications deployed successfully!"
 
       # =============================================================================
@@ -195,14 +195,14 @@ jobs:
         if: ${{ github.event.inputs.confirm == 'apply' }}
         run: |
           echo "Retrieving application passwords..."
-          
+
           ARGOCD_PASSWORD=$(terraform output -raw argocd_admin_password)
           GRAFANA_PASSWORD=$(terraform output -raw grafana_admin_password)
-          
+
           # Set as outputs for Slack notification
           echo "argocd_password=$ARGOCD_PASSWORD" >> $GITHUB_OUTPUT
           echo "grafana_password=$GRAFANA_PASSWORD" >> $GITHUB_OUTPUT
-          
+
           echo "Passwords retrieved successfully"
         working-directory: iac/main
 
@@ -216,20 +216,20 @@ jobs:
           echo "## 🔍 Infrastructure Verification Report" > verification_report.txt
           echo "Generated at: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> verification_report.txt
           echo "" >> verification_report.txt
-          
+
           # EKS Cluster Status
           echo "### ☸️ EKS Cluster Status" >> verification_report.txt
           echo "**Cluster Name:** portfolio-cluster" >> verification_report.txt
           echo "**Node Status:**" >> verification_report.txt
           kubectl get nodes >> verification_report.txt
           echo "" >> verification_report.txt
-          
+
           # Applications Status
           echo "### 🚀 Application Status" >> verification_report.txt
           echo "**ArgoCD Applications:**" >> verification_report.txt
           kubectl get applications -n argocd >> verification_report.txt
           echo "" >> verification_report.txt
-          
+
           # Service Status
           echo "### 🌐 Service Endpoints" >> verification_report.txt
           DOMAIN_NAME=iamanonymous.in
@@ -239,12 +239,12 @@ jobs:
           echo "**Prometheus:** https://prometheus.$DOMAIN_NAME" >> verification_report.txt
           echo "**Alertmanager:** https://alertmanager.$DOMAIN_NAME" >> verification_report.txt
           echo "" >> verification_report.txt
-          
+
           # Resource Summary
           echo "### 📊 Resource Summary" >> verification_report.txt
           echo "**Pods by Namespace:**" >> verification_report.txt
           kubectl get pods --all-namespaces >> verification_report.txt
-          
+
           # Display report
           cat verification_report.txt
         working-directory: iac/main
@@ -324,12 +324,12 @@ jobs:
             • ✅ Infrastructure Verified
 
             🔑 *Application Access Credentials:*
-            
+
             **ArgoCD Admin Password:**
             ```
             ${{ steps.get-passwords.outputs.argocd_password }}
             ```
-            
+
             **Grafana Admin Password:**
             ```
             ${{ steps.get-passwords.outputs.grafana_password }}
